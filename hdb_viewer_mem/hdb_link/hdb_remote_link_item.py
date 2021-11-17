@@ -21,8 +21,9 @@ class HdbRemoteLinkItem:
         self._data_types = None
 
     def __del__(self):
-        if self.closeing is False:
-            self.my_client.close_file(self._file_id)
+        # if self.closeing is False:
+        #     self.my_client.close_file(self._file_id)
+        pass
 
     def open_link(self):
         if self.closeing is True and self.using_num >= 0:
@@ -38,6 +39,7 @@ class HdbRemoteLinkItem:
             self.my_client.close_file(self._file_id)
             self.closeing = True
             self.using_num = self.using_num - 1
+            self._file_id = None
 
     def open_read_task(self, begin_date, begin_time, end_date, end_time,
                        symbol_list, type_list,offset=0):

@@ -11,36 +11,16 @@ class SnapshotDelegate(QAbstractItemDelegate):
         super(SnapshotDelegate, self).__init__()
 
     def paint(self, painter, option, index):
-        """绘制单元格。"""
-        if index.column() == 0:
-            # :表格第一列是ID，单元格中绘制一个图片和ID。
-            p = QStyleOptionViewItem()
-            p.index = index
-            p.rect = option.rect
-            p.features = QStyleOptionViewItem.HasDecoration | QStyleOptionViewItem.HasDisplay
-            p.text = str(index.data())
-            p.decorationSize = QSize(44, 44)      # 设置装饰图标的大小。
-            p.icon = QIcon('../image/id.png')     # 设置装饰图标路径名
-            p.state = option.state
-            p.showDecorationSelected = True     # 开启选中时，单元格高亮显示
-            # :若项目被选择，则高亮绘制其矩形
+        p = option
+        # p.features = QStyleOptionViewItem.HasDisplay
+        # p.showDecorationSelected = True     # 开启选中时，单元格高亮显示
+        p.displayAlignment = index.model().data(index,Qt.TextAlignmentRole)
+        p.text = index.data()
+        p.backgroundBrush = index.data(Qt.BackgroundColorRole)
+        # p.palette.setColor(QPalette.All, QPalette.Text, index.data(Qt.ForegroundRole).color())
+        p.palette.setColor(QPalette.Text, index.data(Qt.ForegroundRole).color())
 
-            p.decorationPosition = QStyleOptionViewItem.Left        # 图片在文字的左边
-            p.displayAlignment = Qt.AlignLeft | Qt.AlignCenter      # 设置文字的位置
-            QApplication.style().drawControl(QStyle.CE_ItemViewItem, p, painter)
-        else:
-            # :向表格中渲染数据，如果缺少下面代码，表格中数据不能正常显示。
-            # :这里应该在model的data函数之后调用，此时通过index可以获取要显示。
-            # :的数据。
-            p = QStyleOptionViewItem()
-            p.features = QStyleOptionViewItem.HasDisplay
-            p.index = index                     # 表格QModelIndex索引
-            p.rect = option.rect
-            p.state = option.state
-
-            p.showDecorationSelected = True     # 开启选中时，单元格高亮显示
-            p.text = str(index.data())          # 表格中的数据
-            QApplication.style().drawControl(QStyle.CE_ItemViewItem, p, painter)
+        QApplication.style().drawControl(QStyle.CE_ItemViewItem, p, painter)
 
     def createEditor(self, parent, option, index):
         """给单元格创建编辑器(点击单元格的时候调用)"""

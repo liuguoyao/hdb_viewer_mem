@@ -19,7 +19,7 @@ def exception_hook(exctype, value, traceback):
     # sys._excepthook(exctype, value, traceback)
     # sys.exit(1)
     text = "\n" + "".join(format_exception(exctype, value, traceback))
-    win.append_log(text)
+    # win.append_log(text)
 
 
 if __name__ == '__main__':

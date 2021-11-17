@@ -4,6 +4,7 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 
 import random
+from hdb_viewer_mem.hdb_service.FetchData_Background_decorator import *
 
 #行情快照 model部分,
 # 处理数据功能:定时读取数据
@@ -13,19 +14,15 @@ class SnapshotTableModel(QAbstractTableModel):
         super(SnapshotTableModel, self).__init__()
         self._data = []
         self._background_color = []
-        self._headers = ['学号', '姓名', '性别', '年龄']
+        # self._headers = ['学号', '姓名', '性别', '年龄']
+        self._headers = []
 
-        self._generate_data()
+        self.fetchData = None
+        self.reading = False
 
-    def _generate_data(self):
-        """填充表格数据"""
-        name_list = ['张三', '李四', '王五', '王小二', '李美丽', '王二狗']
-
-        for id_num, name in enumerate(name_list):
-            self._data.append([str(id_num), name, '男', str(random.randint(20, 25))])
-
-            # :默认单元格颜色为白色
-            self._background_color.append([QColor(255, 255, 255) for i in range(4)])
+        #
+        self.timer = QTimer(timeout=self.refreshData, interval=3000) # ms
+        self.timer.start()
 
     def rowCount(self, parent=QModelIndex()):
         """返回行数量。"""
@@ -49,9 +46,11 @@ class SnapshotTableModel(QAbstractTableModel):
         col = index.column()
 
         if role == Qt.DisplayRole:
-            return self._data[row][col]
-        elif role == Qt.BackgroundColorRole:
+            return str(self._data[row][col])
+        elif role == Qt.BackgroundRole:
             return self._background_color[row][col]
+        elif role == Qt.ForegroundRole:
+            return self._foreground_color[row][col]
         elif role == Qt.TextAlignmentRole:
             return Qt.AlignCenter
 
@@ -63,16 +62,9 @@ class SnapshotTableModel(QAbstractTableModel):
             return QVariant()
 
         if role == Qt.EditRole:
-            if index.column() == 2:
-                self._data[index.row()][index.column()] = value
-                self.layoutChanged.emit()       # 更新数据后要通知表格刷新数据
-                return True
-            elif index.column() == 3:
-                self._data[index.row()][index.column()] = str(value)
-                self.layoutChanged.emit()
-                return True
-            else:
-                return False
+            self._data[index.row()][index.column()] = str(value)
+            self.layoutChanged.emit()
+            return True
 
     def flags(self, index):
         """设置单元格的属性。"""
@@ -81,3 +73,41 @@ class SnapshotTableModel(QAbstractTableModel):
             return super().flags(index)
 
         return Qt.ItemIsEditable | super().flags(index)
+
+    #custom
+    def setheader(self,headerlist):
+        self._headers = headerlist
+
+    def setCustomData(self,data):
+        self._data = data
+        self._background_color = []
+        self._foreground_color= []
+        if len(data)>0:
+            for rowdata in data:
+                self._background_color.append([QBrush(QColor(255, 255, 240)) for i in range(len(rowdata))])
+                self._foreground_color.append([QBrush(QColor(0, 0, 200)) for i in range(len(rowdata))])
+
+
+    def refreshData(self):
+        #调用FetchDataBackGround
+        if self.fetchData is None or not self.reading:
+            self.reading = True
+            print("fetchData is None or not reading")
+            self.fetchData = FetchData_Background_decorator(load2)
+            self.fetchData.sigDataReturn.connect(self.set_custom_data_slot)
+            # self.fetchData.sigProgressRate.connect(lambda v: print('PprogressRate emit rev:', v))
+            # self.fetchData.sigProgressRate.connect(lambda v: print('sigProgressRate emit rev:', v))
+        else:
+            print("is reading ...")
+
+
+    def set_custom_data_slot(self,result_list):
+        print("slot:", len(result_list))
+        if len(result_list)>1:
+            self.setheader(result_list[0])
+            self.setCustomData(result_list[1:])
+            self.layoutChanged.emit()
+        self.reading = False
+
+    def __del__(self):
+        print("snapshot tablemode del")
