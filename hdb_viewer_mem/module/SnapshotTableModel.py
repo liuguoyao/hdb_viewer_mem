@@ -5,6 +5,10 @@ from PyQt5.QtGui import *
 
 import random
 from hdb_viewer_mem.hdb_service.FetchData_Background_decorator import *
+from hdb_viewer_mem.util.logger import *
+
+logger = get_logger(__name__)
+logger.setLevel(logging.DEBUG)
 
 #行情快照 model部分,
 # 处理数据功能:定时读取数据
@@ -92,17 +96,17 @@ class SnapshotTableModel(QAbstractTableModel):
         #调用FetchDataBackGround
         if self.fetchData is None or not self.reading:
             self.reading = True
-            print("fetchData is None or not reading")
+            logger.debug("fetchData is None or not reading")
             self.fetchData = FetchData_Background_decorator(load2)
             self.fetchData.sigDataReturn.connect(self.set_custom_data_slot)
             # self.fetchData.sigProgressRate.connect(lambda v: print('PprogressRate emit rev:', v))
             # self.fetchData.sigProgressRate.connect(lambda v: print('sigProgressRate emit rev:', v))
         else:
-            print("is reading ...")
+            logger.debug("is reading ...")
 
 
     def set_custom_data_slot(self,result_list):
-        print("slot:", len(result_list))
+        logger.debug("slot:" + str(len(result_list)))
         if len(result_list)>1:
             self.setheader(result_list[0])
             self.setCustomData(result_list[1:])
@@ -110,4 +114,4 @@ class SnapshotTableModel(QAbstractTableModel):
         self.reading = False
 
     def __del__(self):
-        print("snapshot tablemode del")
+        logger.debug("snapshot tablemode del")

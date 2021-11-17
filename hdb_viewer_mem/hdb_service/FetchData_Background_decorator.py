@@ -34,6 +34,10 @@ from hdb_py.hdb_data_item import *
 # from hdb_py.hdb_data_item import HDBDataItem
 
 from hdb_viewer_mem.util.utility import *
+from hdb_viewer_mem.util.logger import *
+
+logger = get_logger(__name__)
+logger.setLevel(logging.DEBUG)
 
 #进程初始化 根据需要改动
 def ppoolinitializer(n=0):
@@ -48,12 +52,13 @@ def ppoolinitializer(n=0):
                                 initmap["file_path"])
         ret = g_hdbclient.open_client()
         if ret <= 0:
-            print("open_client ERR:")
+            logger.exception("open_client ERR:")
         g_remoteLink = HdbRemoteLinkItem(g_hdbclient, "memory/marketdata", "tick_20230807")
         g_remoteLink.open_link()
     except Exception as e:
-        print("ppoolinitializer ERR:", e)
-        print(traceback.format_exc())
+        logger.exception("ppoolinitializer ERR:")
+        logger.exception(e)
+        # print(traceback.format_exc())
     pass
 
 
@@ -106,6 +111,7 @@ class Task(QRunnable):
         threadname = threading.currentThread().name
         threadname not in g_threadids and g_threadids.insert(0, threadname)
         # print(threadname, ' in ', g_threadids)
+        logger.debug(threadname + ' in ' + str(g_threadids))
         queue_index = g_threadids.index(threadname)
         if queue_index >= len(g_queues):
             # print("queue_index >= len(g_queues)")
@@ -125,12 +131,15 @@ class Task(QRunnable):
             global g_executor
             if g_executor is None:
                 return
-            print('MY Process Exception:',r.exception())
-            print(traceback.format_exc())
+            # print('MY Process Exception:',r.exception())
+            # print(traceback.format_exc())
+            logger.exception('MY Process Exception:')
+            logger.exception(r.exception())
+            logger.exception(traceback.format_exc())
             self.sigDataReturn.emit([])
 
             #
-            print("re create ProcessPoolExecutor ...")
+            logger.exception("re create ProcessPoolExecutor ...")
             if sys.version > "3.7.0":
                 # python 3.7
                 g_executor = ProcessPoolExecutor(max_workers=max_workers, initializer=ppoolinitializer)
@@ -159,7 +168,8 @@ class FetchData_Background_decorator(QObject):
             cls.thread_pool = QThreadPool().globalInstance()
             cls.thread_pool.setExpiryTimeout(-1)
             cls.thread_pool.setMaxThreadCount(max_workers)
-            print(cls.thread_pool.maxThreadCount())
+            # print(cls.thread_pool.maxThreadCount())
+            logger.debug("thread_pool.maxThreadCount:"+str(cls.thread_pool.maxThreadCount()))
             cls.thread_pool.start(CreateExecutor())
 
     @staticmethod
@@ -168,26 +178,26 @@ class FetchData_Background_decorator(QObject):
         if g_executor is not None:
             for pid, process in g_executor._processes.items():
                 process.terminate()
-                print('terminate:', pid, process)
+                # print('terminate:', pid, process)
+                logger.debug('terminate:'+ str(pid) + str(process))
         g_executor = None
 
 
     def __del__(self):
-        print("FetchBackGroudD: call del .. ")
+        logger.debug("FetchBackGroudD: call del .. ")
     #     self.close()
 
 
 
 ##  test  ##
 def loadtest(x, **kargs):
-    print("call loadNothing ...")
-    print(x, kargs)
+    logger.debug("call loadNothing ...")
     'recvq' in kargs.keys() and kargs['recvq'].put(50)  # 发送进度信息
     return [1, 2, 3]
 
 def load2( **kargs):
     global g_remoteLink
-    print("call open_read_task")
+    logger.debug("call open_read_task .. ")
 
     ret = []
     try:
@@ -196,7 +206,7 @@ def load2( **kargs):
         header = None
         while True:
             ret, cnt = g_remoteLink.get_data_items(30)
-            print("while True cnt:",cnt)
+            logger.debug("while True cnt:" + str(cnt))
             if cnt <=0:
                 break
             for ind, item in enumerate(ret):
@@ -210,10 +220,10 @@ def load2( **kargs):
 
         g_remoteLink.close_read_task()
     except Exception as e:
-        print("load2 Exception:", e)
-        print(traceback.format_exc())
+        logger.exception("load2 Exception:")
+        logger.exception(e)
         return []
-    print("call close_read_task ... ")
+    logger.debug("call close_read_task ... ")
     return ret
 
 
