@@ -38,8 +38,11 @@ class SnapshotTableModel(QAbstractTableModel):
 
     def headerData(self, section, orientation, role):
         """设置表格头"""
-        if role == Qt.DisplayRole and orientation == Qt.Horizontal:
-            return self._headers[section]
+        if role == Qt.DisplayRole:
+            if orientation == Qt.Horizontal:
+                return self._headers[section]
+            elif orientation == Qt.Vertical:
+                return str(section+1)
 
     def data(self, index, role):
         """显示表格中的数据。"""
@@ -88,9 +91,8 @@ class SnapshotTableModel(QAbstractTableModel):
         self._foreground_color= []
         if len(data)>0:
             for rowdata in data:
-                self._background_color.append([QBrush(QColor(255, 255, 240)) for i in range(len(rowdata))])
-                self._foreground_color.append([QBrush(QColor(0, 0, 200)) for i in range(len(rowdata))])
-
+                self._background_color.append([QBrush(QColor(255, 255, 255)) for i in range(len(rowdata))])
+                self._foreground_color.append([QBrush(QColor(0, 100, 200)) for i in range(len(rowdata))])
 
     def refreshData(self):
         #调用FetchDataBackGround

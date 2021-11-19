@@ -17,8 +17,8 @@ class SnapshotDelegate(QAbstractItemDelegate):
         p.displayAlignment = index.model().data(index,Qt.TextAlignmentRole)
         p.text = index.data()
         p.backgroundBrush = index.data(Qt.BackgroundColorRole)
-        # p.palette.setColor(QPalette.All, QPalette.Text, index.data(Qt.ForegroundRole).color())
         p.palette.setColor(QPalette.Text, index.data(Qt.ForegroundRole).color())
+        p.palette.setColor(QPalette.HighlightedText, QColor(0,0,0))
 
         QApplication.style().drawControl(QStyle.CE_ItemViewItem, p, painter)
 
