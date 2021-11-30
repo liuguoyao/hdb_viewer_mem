@@ -10,37 +10,47 @@ from hdb_viewer_mem.util.logger import *
 logger = get_logger(__name__)
 logger.setLevel(logging.DEBUG)
 
+
 #行情快照 model部分,
 # 处理数据功能:定时读取数据
 class SnapshotTableModel(QAbstractTableModel):
     """Model"""
     def __init__(self):
         super(SnapshotTableModel, self).__init__()
-        self._data = []
+        self._data = pd.DataFrame()
+
+        manager = Manager()
+        self.manager_dic = manager.dict()
+        self.manager_list = manager.list()
+        self.manager_list.append(pd.DataFrame())
+
         self._background_color = []
-        # self._headers = ['学号', '姓名', '性别', '年龄']
-        self._headers = []
 
         self.fetchData = None
         self.reading = False
 
         #
-        self.timer = QTimer(timeout=self.refreshData, interval=3000) # ms
+        self.timer = QTimer(timeout=self.refreshUIData, interval=3000) # ms
         self.timer.start()
+
+        self.refreshData()
 
     def rowCount(self, parent=QModelIndex()):
         """返回行数量。"""
-        return len(self._data)
+        return self._data.shape[0]
+        # return self.manager_list[0].shape[0]
 
     def columnCount(self, parent=QModelIndex()):
         """返回列数量。"""
-        return len(self._headers)
+        return self._data.shape[1]
+        # return self.manager_list[0].shape[1]
 
     def headerData(self, section, orientation, role):
         """设置表格头"""
         if role == Qt.DisplayRole:
             if orientation == Qt.Horizontal:
-                return self._headers[section]
+                return list(self._data.columns)[section]
+                # return list(self.manager_list[0].columns)[section]
             elif orientation == Qt.Vertical:
                 return str(section+1)
 
@@ -53,67 +63,84 @@ class SnapshotTableModel(QAbstractTableModel):
         col = index.column()
 
         if role == Qt.DisplayRole:
-            return str(self._data[row][col])
+            return str(self._data.iat[row,col])
+            # return str(self.manager_list[0].iat[row,col])
         elif role == Qt.BackgroundRole:
-            return self._background_color[row][col]
+            if row >= len(self._background_color) :
+                return QBrush(QColor(255, 255, 255))
+            else:
+                return self._background_color[row][col]
+            # return QBrush(QColor(255, 255, 255))
         elif role == Qt.ForegroundRole:
-            return self._foreground_color[row][col]
+            if row >= len(self._foreground_color) :
+                return QBrush(QColor(0, 100, 200))
+            else:
+                return self._foreground_color[row][col]
+            # return QBrush(QColor(0, 100, 200))
         elif role == Qt.TextAlignmentRole:
             return Qt.AlignCenter
 
         return QVariant()
 
-    def setData(self, index, value, role):
-        """编辑单元格中的数据"""
-        if not index.isValid() or not 0 <= index.row() < self.rowCount():
-            return QVariant()
+    # def setData(self, index, value, role):
+    #     """编辑单元格中的数据"""
+    #     if not index.isValid() or not 0 <= index.row() < self.rowCount():
+    #         return QVariant()
+    #
+    #     if role == Qt.EditRole:
+    #         self._data[index.row()][index.column()] = str(value)
+    #         self.layoutChanged.emit()
+    #         return True
 
-        if role == Qt.EditRole:
-            self._data[index.row()][index.column()] = str(value)
-            self.layoutChanged.emit()
-            return True
-
-    def flags(self, index):
-        """设置单元格的属性。"""
-        if index.column() == 0 or index.column() == 1:
-            # :我们设置第0、1列不可编辑，其他列可以编辑。
-            return super().flags(index)
-
-        return Qt.ItemIsEditable | super().flags(index)
-
-    #custom
-    def setheader(self,headerlist):
-        self._headers = headerlist
-
-    def setCustomData(self,data):
-        self._data = data
-        self._background_color = []
-        self._foreground_color= []
-        if len(data)>0:
-            for rowdata in data:
-                self._background_color.append([QBrush(QColor(255, 255, 255)) for i in range(len(rowdata))])
-                self._foreground_color.append([QBrush(QColor(0, 100, 200)) for i in range(len(rowdata))])
+    # def flags(self, index):
+    #     """设置单元格的属性。"""
+    #     if index.column() == 0 or index.column() == 1:
+    #         # :我们设置第0、1列不可编辑，其他列可以编辑。
+    #         return super().flags(index)
+    #
+    #     return Qt.ItemIsEditable | super().flags(index)
 
     def refreshData(self):
         #调用FetchDataBackGround
         if self.fetchData is None or not self.reading:
             self.reading = True
             logger.debug("fetchData is None or not reading")
-            self.fetchData = FetchData_Background_decorator(load2)
+            # self.fetchData = FetchData_Background_decorator(load2)
+            self.fetchData = FetchData_Background_decorator(snapCachRefresh,dic=self.manager_dic)
             self.fetchData.sigDataReturn.connect(self.set_custom_data_slot)
             # self.fetchData.sigProgressRate.connect(lambda v: print('PprogressRate emit rev:', v))
             # self.fetchData.sigProgressRate.connect(lambda v: print('sigProgressRate emit rev:', v))
         else:
             logger.debug("is reading ...")
 
+    def refreshUIData(self):
+        logger.debug("refreshUIData")
+
+        self.refreshUI = FetchData_Background_decorator(refreshUIData, dic=self.manager_dic, lis=self.manager_list)
+        self.refreshUI.sigDataReturn.connect(self.refreshUI_slot)
+        pass
+
+    def refreshUI_slot(self, result_list):
+
+        self._background_color = []
+        self._foreground_color = []
+        rows, cls = self.manager_list[0].shape[0],self.manager_list[0].shape[1]
+        for rowidx in range(rows):
+            self._background_color.append([QBrush(QColor(255, 255, 255)) for i in range(cls)])
+            self._foreground_color.append([QBrush(QColor(0, 100, 200)) for i in range(cls)])
+        self._data = self.manager_list[0]
+        self.layoutChanged.emit()
+        pass
+
 
     def set_custom_data_slot(self,result_list):
         logger.debug("slot:" + str(len(result_list)))
-        if len(result_list)>1:
-            self.setheader(result_list[0])
-            self.setCustomData(result_list[1:])
-            self.layoutChanged.emit()
-        self.reading = False
+        self.refreshData()
+        # if len(result_list)>1:
+        #     self.setheader(result_list[0])
+        #     self.setCustomData(result_list[1:])
+        #     self.layoutChanged.emit()
+        # self.reading = False
 
     def __del__(self):
         logger.debug("snapshot tablemode del")

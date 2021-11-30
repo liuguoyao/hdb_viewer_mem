@@ -15,7 +15,7 @@ from hdb_viewer_mem.module.hdb_main import *
 
 
 def exception_hook(exctype, value, traceback):
-    sys._excepthook(exctype, value, traceback)
+    sys.excepthook(exctype, value, traceback)
     # sys.exit(1)
     # text = "\n" + "".join(format_exception(exctype, value, traceback))
     # win.append_log(text)

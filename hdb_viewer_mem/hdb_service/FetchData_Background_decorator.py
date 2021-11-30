@@ -12,18 +12,7 @@ import time
 import traceback
 import sys
 import threading
-
-max_workers = 1
-
-g_queues = None
-g_threadids = []
-# g_pool = None
-g_executor = None
-# g_hasInit = False
-# mutex = QMutex()
-
-g_hdbclient = None
-g_remoteLink = None
+import pandas as pd
 
 # from hdb_viewer_mem.hdb_link.hdb_link_item import *
 from hdb_viewer_mem.hdb_link.hdb_remote_link_item import  *
@@ -39,26 +28,25 @@ from hdb_viewer_mem.util.logger import *
 logger = get_logger(__name__)
 logger.setLevel(logging.DEBUG)
 
+DEBUG = False
+
+max_workers = 2
+
+
+g_lock = None
+g_queues = None
+
+g_threadids = []
+g_executor = None
+
+# mutex = QMutex()
+
+g_config_path = r"./config/system_config.ini"
+if DEBUG:
+    g_config_path = r"../../config/system_config.ini"
+
 #进程初始化 根据需要改动
 def ppoolinitializer(n=0):
-    try:
-        global g_hdbclient
-        global g_remoteLink
-
-        config_path = r"./config/system_config.ini"
-        initmap = config_ini_key_value(keys=[],config_file=config_path)
-        g_hdbclient = HdbClient(initmap['his_svr_addr'], initmap['his_srv_port'],
-                                initmap['his_user'], initmap['his_pwd'],
-                                initmap["file_path"])
-        ret = g_hdbclient.open_client()
-        if ret <= 0:
-            logger.exception("open_client ERR:")
-        g_remoteLink = HdbRemoteLinkItem(g_hdbclient, "memory/marketdata", "tick_20230807")
-        g_remoteLink.open_link()
-    except Exception as e:
-        logger.exception("ppoolinitializer ERR:")
-        logger.exception(e)
-        # print(traceback.format_exc())
     pass
 
 
@@ -70,9 +58,15 @@ class CreateExecutor(QRunnable):
         global g_executor
         if g_executor is not None:
             return
+        global manager
+        global g_lock
         global g_queues
+
+        logger.debug("Manager() Init ...")
         manager = Manager()
+        g_lock = manager.Lock()
         g_queues = []
+
         for i in range(max_workers):
             g_queues.append(manager.Queue())
 
@@ -103,6 +97,7 @@ class Task(QRunnable):
     def run(self):
         global g_threadids
         global g_executor
+        global g_lock
         global g_queues
         if g_queues is None:
             time.sleep(3)
@@ -116,7 +111,9 @@ class Task(QRunnable):
         if queue_index >= len(g_queues):
             # print("queue_index >= len(g_queues)")
             return
+        self.kargs['lock'] = g_lock
         self.kargs['recvq'] = g_queues[queue_index]
+
         r = g_executor.submit(self.fn, *self.args, **self.kargs)
         r.add_done_callback(self.cb)
         while True:
@@ -195,39 +192,92 @@ def loadtest(x, **kargs):
     'recvq' in kargs.keys() and kargs['recvq'].put(50)  # 发送进度信息
     return [1, 2, 3]
 
-def load2( **kargs):
-    global g_remoteLink
-    logger.debug("call open_read_task .. ")
 
-    ret = []
+# g_readTaskOpened = None
+def snapCachRefresh( **kargs):
+    logger.debug("call snapCachRefresh .. ")
+    if 'dic' not in kargs.keys() or 'lock' not in kargs.keys():  # 快照信息
+        return []
+
+    lock = kargs['lock']
+    dic_snap = kargs['dic']
+
     try:
-        ret = g_remoteLink.open_read_task(0,0,0,0,["SH.688009"], ["SecurityTick"])
-        listv = []
+        global g_config_path
+        # config_path = r"./config/system_config.ini"
+        initmap = config_ini_key_value(keys=[],config_file=g_config_path)
+        g_hdbclient = HdbClient(initmap['his_svr_addr'], initmap['his_srv_port'],
+                                initmap['his_user'], initmap['his_pwd'],
+                                initmap["file_path"])
+        ret = g_hdbclient.open_client()
+        if ret <= 0:
+            logger.exception("open_client ERR:")
+        g_remoteLink = HdbRemoteLinkItem(g_hdbclient, "memory/marketdata", "tick_20230807")
+        g_remoteLink.open_link()
+
+        # g_remoteLink.open_read_task(0,0,0,0,['SH.688009'], ["SecurityTick"])
+        g_remoteLink.open_read_task(0,0,0,0,['SH.688009','SH.603976','SH.603977'], ["SecurityTick"])
+
         header = None
         while True:
-            ret, cnt = g_remoteLink.get_data_items(30)
-            logger.debug("while True cnt:" + str(cnt))
-            if cnt <=0:
-                break
+            ret, cnt = g_remoteLink.get_data_items(1)
+            time.sleep(1) #debug
+            logger.debug("snapCachRefresh get cnt:" + str(cnt))
+            if 0 == cnt:
+                logger.debug("snapCachRefresh sleep")
+                time.sleep(1)  # wait 1 s
             for ind, item in enumerate(ret):
-                if ind == 0 and len(listv) == 0:
+                if ind == 0 :
                     header = list(item.total_list_value_names)
-                    listv.append(header)
                 v = item.total_list_value
-                listv.append(v)
                 'recvq' in kargs.keys() and kargs['recvq'].put(int(100*ind/len(ret)))# 发送进度信息
-        ret = listv
+                symbol = v[0]
+                with lock:
+                    if symbol not in dic_snap.keys():
+                        dic_snap[symbol] = pd.DataFrame(columns = header)
+                    tmp = pd.DataFrame([item.total_list_value],columns=header,index=[symbol])
+                    dic_snap[symbol] = dic_snap[symbol].append(tmp,ignore_index=True)
 
-        g_remoteLink.close_read_task()
+        # g_remoteLink.close_read_task()
     except Exception as e:
-        logger.exception("load2 Exception:")
+        logger.exception("snapCachRefresh Exception:")
         logger.exception(e)
-        return []
-    logger.debug("call close_read_task ... ")
-    return ret
+    return []
+
+def refreshUIData(**kargs):
+    logger.debug("call refreshUIData .. ")
+    try:
+        if 'lis' not in kargs.keys() or 'dic' not in kargs.keys() or 'lock' not in kargs.keys():  # 快照信息
+            return []
+
+        lock = kargs['lock']
+        dic_snap = kargs['dic']
+        data = kargs['lis']
+        pdData = data[0]
+
+        if len(dic_snap.keys()) == 0:
+            return []
+
+        for symbol in dic_snap.keys():
+            v = dic_snap[symbol].iloc[-1]
+            tmpdf = pd.DataFrame([v], index=[symbol])
+            if symbol not in data[0].index.values:
+                data[0] = data[0].append(tmpdf)
+            else:
+                # data[0].loc[symbol] = v #pd.Series(v)
+                pdData.update(tmpdf)
+                data[0] = pdData
+
+    except Exception as e:
+        logger.exception("refreshUIData Exception:")
+        logger.exception(e)
+
+    return []
+
 
 
 if __name__ == '__main__':
+
     app = QApplication([])
 
     win = QMainWindow()
@@ -235,6 +285,14 @@ if __name__ == '__main__':
     fetchData = FetchData_Background_decorator(loadtest, "AAA")
     fetchData.sigDataReturn.connect(lambda v: print('emit rev:', v))
     fetchData.sigProgressRate.connect(lambda v: print('PprogressRate emit rev:', v))
+
+    fetchData2 = FetchData_Background_decorator(loadtest, "AAA")
+    fetchData2.sigDataReturn.connect(lambda v: print('emit rev:', v))
+    fetchData2.sigProgressRate.connect(lambda v: print('PprogressRate emit rev:', v))
+
+    fetchData3 = FetchData_Background_decorator(snapCachRefresh)
+    fetchData3.sigDataReturn.connect(lambda v: print('emit rev:', v))
+    fetchData3.sigProgressRate.connect(lambda v: print('PprogressRate emit rev:', v))
 
     win.show()
     app.exec_()
