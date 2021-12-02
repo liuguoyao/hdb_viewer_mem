@@ -100,6 +100,9 @@ class SnapshotTableModel(QAbstractTableModel):
     #
     #     return Qt.ItemIsEditable | super().flags(index)
 
+    def headerNames(self):
+        return list(self._data.columns)
+
     def refreshData(self):
         #调用FetchDataBackGround
         if self.fetchData is None or not self.reading:
