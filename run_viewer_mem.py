@@ -29,6 +29,5 @@ if __name__ == '__main__':
         win = hdb_main_win()
         win.show()
         app.exec()
-        logger.info("start ...")
     except Exception as e:
         logger.exception(e)

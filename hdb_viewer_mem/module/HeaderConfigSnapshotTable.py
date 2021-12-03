@@ -15,8 +15,31 @@ class HeaderConfigSnapshotTable(QWidget,Ui_HeaderConfigSnapshotTable):
         super(HeaderConfigSnapshotTable,self).__init__(parent)
         self.setupUi(self)
         self.resize(self.graphicsView.hcviewRect.width()+30,self.graphicsView.hcviewRect.height()+30)
+
+        #config windows
+        self.setWindowFlags(Qt.WindowMinimizeButtonHint|Qt.WindowCloseButtonHint)
+        self.setFixedSize(self.width(), self.height());
+
+        #sig slot
+        self.pushButton_OK.clicked.connect(self.slot_OK)
+        self.pushButton_cancel.clicked.connect(self.slot_cancel)
+
+        # set headernames
         for name in headerNames:
-            self.graphicsView.addCustomItem(name)
+            self.graphicsView.addCustomItem(name, 1)
+
+    def get_headers(self):
+        return self.graphicsView.get_headers()
+
+    def slot_OK(self):
+        logger.debug("slot_OK ... ")
+        logger.debug(self.get_headers())
+        pass
+
+    def slot_cancel(self):
+        logger.debug("slot_cancel ... ")
+        self.close()
+        pass
 
 if __name__ == '__main__':
     import traceback

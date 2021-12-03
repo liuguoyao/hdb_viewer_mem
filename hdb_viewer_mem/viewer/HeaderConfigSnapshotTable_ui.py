@@ -14,17 +14,33 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 class Ui_HeaderConfigSnapshotTable(object):
     def setupUi(self, HeaderConfigSnapshotTable):
         HeaderConfigSnapshotTable.setObjectName("HeaderConfigSnapshotTable")
-        HeaderConfigSnapshotTable.resize(512, 256)
+        HeaderConfigSnapshotTable.resize(694, 528)
         self.verticalLayout = QtWidgets.QVBoxLayout(HeaderConfigSnapshotTable)
         self.verticalLayout.setObjectName("verticalLayout")
+        self.verticalLayout_2 = QtWidgets.QVBoxLayout()
+        self.verticalLayout_2.setObjectName("verticalLayout_2")
         self.graphicsView = headerConfView(HeaderConfigSnapshotTable)
         self.graphicsView.setObjectName("graphicsView")
-        self.verticalLayout.addWidget(self.graphicsView)
+        self.verticalLayout_2.addWidget(self.graphicsView)
+        self.horizontalLayout = QtWidgets.QHBoxLayout()
+        self.horizontalLayout.setObjectName("horizontalLayout")
+        spacerItem = QtWidgets.QSpacerItem(40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
+        self.horizontalLayout.addItem(spacerItem)
+        self.pushButton_OK = QtWidgets.QPushButton(HeaderConfigSnapshotTable)
+        self.pushButton_OK.setObjectName("pushButton_OK")
+        self.horizontalLayout.addWidget(self.pushButton_OK)
+        self.pushButton_cancel = QtWidgets.QPushButton(HeaderConfigSnapshotTable)
+        self.pushButton_cancel.setObjectName("pushButton_cancel")
+        self.horizontalLayout.addWidget(self.pushButton_cancel)
+        self.verticalLayout_2.addLayout(self.horizontalLayout)
+        self.verticalLayout.addLayout(self.verticalLayout_2)
 
         self.retranslateUi(HeaderConfigSnapshotTable)
         QtCore.QMetaObject.connectSlotsByName(HeaderConfigSnapshotTable)
 
     def retranslateUi(self, HeaderConfigSnapshotTable):
         _translate = QtCore.QCoreApplication.translate
-        HeaderConfigSnapshotTable.setWindowTitle(_translate("HeaderConfigSnapshotTable", "Form"))
+        HeaderConfigSnapshotTable.setWindowTitle(_translate("HeaderConfigSnapshotTable", "表头配置"))
+        self.pushButton_OK.setText(_translate("HeaderConfigSnapshotTable", "确定"))
+        self.pushButton_cancel.setText(_translate("HeaderConfigSnapshotTable", "取消"))
 from hdb_viewer_mem.module.headerConfView import headerConfView
