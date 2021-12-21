@@ -14,14 +14,17 @@ logger.setLevel(logging.DEBUG)
 #行情快照 model部分,
 # 处理数据功能:定时读取数据
 class SnapshotTableModel(QAbstractTableModel):
+    sigdatafresh = pyqtSignal()
     """Model"""
     def __init__(self):
         super(SnapshotTableModel, self).__init__()
         self._data = pd.DataFrame()
 
         manager = Manager()
-        self.manager_dic = manager.dict()
-        self.manager_list = manager.list()
+        self.manager_dic_SecurityTick = manager.dict() #内存快照信息
+        self.manager_dic_SHSetpTrade = manager.dict() #
+        self.manager_dic_SZSetpTrade = manager.dict() #
+        self.manager_list = manager.list() #tableview显示的快照信息
         self.manager_list.append(pd.DataFrame())
 
         self._background_color = []
@@ -109,7 +112,7 @@ class SnapshotTableModel(QAbstractTableModel):
             self.reading = True
             logger.debug("fetchData is None or not reading")
             # self.fetchData = FetchData_Background_decorator(load2)
-            self.fetchData = FetchData_Background_decorator(snapCachRefresh,dic=self.manager_dic)
+            self.fetchData = FetchData_Background_decorator(snapCachRefresh,dic_security=self.manager_dic_SecurityTick)
             self.fetchData.sigDataReturn.connect(self.set_custom_data_slot)
             # self.fetchData.sigProgressRate.connect(lambda v: print('PprogressRate emit rev:', v))
             # self.fetchData.sigProgressRate.connect(lambda v: print('sigProgressRate emit rev:', v))
@@ -119,7 +122,7 @@ class SnapshotTableModel(QAbstractTableModel):
     def refreshUIData(self):
         logger.debug("refreshUIData")
 
-        self.refreshUI = FetchData_Background_decorator(refreshUIData, dic=self.manager_dic, lis=self.manager_list)
+        self.refreshUI = FetchData_Background_decorator(refreshUIData, dic_security=self.manager_dic_SecurityTick, lis=self.manager_list)
         self.refreshUI.sigDataReturn.connect(self.refreshUI_slot)
         pass
 
@@ -133,6 +136,7 @@ class SnapshotTableModel(QAbstractTableModel):
             self._foreground_color.append([QBrush(QColor(0, 100, 200)) for i in range(cls)])
         self._data = self.manager_list[0]
         self.layoutChanged.emit()
+        self.sigdatafresh.emit()
         pass
 
 

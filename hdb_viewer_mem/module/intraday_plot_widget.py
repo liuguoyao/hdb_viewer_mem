@@ -42,14 +42,14 @@ class TimeAxis(pg.AxisItem):
 
 
 class ReturnAxis(pg.AxisItem):
-    def __init__(self, open_price, *args, **kwargs):
+    def __init__(self, pre_close, *args, **kwargs):
         super(ReturnAxis, self).__init__(*args, **kwargs)
-        self.open_price = open_price
+        self.pre_close = pre_close
 
     def tickStrings(self, values, scale, spacing):
         strings = []
         for t in values:
-            cur_return = t / self.open_price - 1
+            cur_return = t / self.pre_close - 1
             # s = "%8.2f%% " % (100 * cur_return)
             s = "{:<8.2%}".format(cur_return)
             strings.append(s)
@@ -274,9 +274,9 @@ class leftPlotWidget(QWidget):
             plt.addItem(vb.v_line, ignoreBounds=True)
             plt.addItem(vb.h_line, ignoreBounds=True)
 
-            vb.setLimits(minXRange=30)
+            plt.setLimits(xMin=0, xMax=240)
             vb.sigXRangeChanged.connect(self.set_y_range)
-            # vb.key_press_sig.connect(partial(self.key_press, vb=vb))
+            vb.key_press_sig.connect(partial(self.key_press, vb=vb))
             # vb.sigkeyPressEvent.connect(partial(self.roi_del_event, vb=vb))
 
             self.plts.append(plt)
@@ -290,7 +290,9 @@ class leftPlotWidget(QWidget):
         for plt in self.plts:
             plt.setClipToView(True)
             plt.setMouseEnabled(x=True, y=False)
-            # plt.enableAutoRange()
+            # plt.setAutoVisible(y=True)
+            # plt.enableAutoRange(axis='y', enable=True)
+
             plt.showGrid(x=True, y=True, alpha=0.2)
 
             plt.getAxis("left").setWidth(80)
@@ -300,6 +302,12 @@ class leftPlotWidget(QWidget):
             null_axis.setHeight(0)
             plt.setAxisItems({"top": null_axis})
             plt.showAxis("top")
+
+        null_axis = SpaceAxis(0, orientation='bottom')
+        null_axis.setHeight(0)
+        # self.plts[0].setAxisItems({"bottom": null_axis})
+        self.returnAxis = ReturnAxis(1,orientation="right")
+        self.plts[0].setAxisItems({"bottom": null_axis,"right":self.returnAxis})
 
         for vb in self.vbs[0:]:
             vb.setXLink(self.vbs[0])
@@ -598,31 +606,32 @@ class leftPlotWidget(QWidget):
         self.price_text_item.setPos(vi_rect.left(), y_pos_label)
 
         # place return item
-        self.return_item.setHtml("<span>%.2f%%" % value_view_y)
+        self.return_item.setHtml("<span>%.2f%%" % (value_view_y*100/self.returnAxis.pre_close - 100))
         y_pos_label = y_pos + self.return_item.sceneBoundingRect().height() / 2
         self.return_item.setPos(vi_rect.right(), y_pos_label)
 
-    # def key_press(self, mv_step, zoom_step, vb):
-    #     if mv_step != 0:
-    #         x_pos = vb.v_line.getXPos()
-    #         y_pos = vb.h_line.getYPos()
-    #         new_x_pos = x_pos + mv_step
-    #         new_x_pos = max(min(int(new_x_pos), len(self.tick_df) - 1), 0)
-    #         new_y_pos = self.tick_df.iloc[int(new_x_pos)]["match"] / 10000
-    #         for cur_vb in self.vbs:
-    #             self.update_cross_line(new_x_pos, new_y_pos, cur_vb)
-    #         # update axis text
-    #         new_pos = QtCore.QPointF(new_x_pos, new_y_pos)
-    #         self.update_axis_text(new_pos, vb)
-    #
-    #     if zoom_step != 0:
-    #         x_pos = vb.v_line.getXPos()
-    #         y_pos = vb.h_line.getYPos()
-    #         center = QtCore.QPointF(x_pos, y_pos)
-    #         factor = 1
-    #         adj = 0.1 * zoom_step
-    #         factor = factor + adj
-    #         vb.scaleBy([factor, 0], center)
+    def key_press(self, mv_step, zoom_step, vb):
+        if mv_step != 0:
+            x_pos = vb.v_line.getXPos()
+            y_pos = vb.h_line.getYPos()
+
+            new_x_pos = x_pos + mv_step
+            new_y_pos = y_pos
+
+            new_pos = QtCore.QPointF(new_x_pos, new_y_pos)
+            scence_pos = vb.mapViewToScene(new_pos)
+
+            self.update_cross_line(scence_pos)
+            self.update_axis_text(scence_pos)
+
+        if zoom_step != 0:
+            x_pos = vb.v_line.getXPos()
+            y_pos = vb.h_line.getYPos()
+            center = QtCore.QPointF(x_pos, y_pos)
+            factor = 1
+            adj = 0.1 * zoom_step
+            factor = factor + adj
+            vb.scaleBy([factor, 0], center)
 
     @staticmethod
     def set_y_range(vb, range):
@@ -978,8 +987,11 @@ class IntraDayPlotWidget(QWidget):
         #窗口比例
         self.hblayout.setStretchFactor(self.leftwin,1)
 
+        #默认line bar
+        self.price_line = self.leftwin.plts[0].plot(pen = pg.mkPen(width=2, color=(200, 0, 0)))
+
         #signal slot
-        self.leftwin.mouse_move_sig.connect(lambda x :print(x))
+        # self.leftwin.mouse_move_sig.connect(lambda x :print(x))
 
     def set_symbolname(self,name):
         self.rightwin.symbol_label.setText(name)
@@ -990,30 +1002,38 @@ class IntraDayPlotWidget(QWidget):
         self.rightwin.askbidtable.refreshData(askprice, askvol, bidprice, bidvol)
 
     def set_order_data(self,data):
-        self.rightwin.ordertable.refreshData()
+        self.rightwin.ordertable.refreshData(data)
         pass
+
+    def set_ReturnAxis_benchmark_prcie(self,price):
+        self.leftwin.returnAxis.pre_close = price
 
     def plotline(self, x=None, y=None, *args, **kargs):
         if x is None or y is None:
             return
+        self.leftwin.plts[0].setXRange(0, 240, padding=0)
+
         if 'pen' in kargs.keys():
             return self.leftwin.plts[0].plot(x=x, y=y, pen=kargs['pen'])
         else:
             return self.leftwin.plts[0].plot(x=x, y=y)
 
+
+
     def plotbar(self, x=None, height=None, *args, **kargs):
         if hasattr(self,"pos_bar"):
-            self.pos_bar.setOpts(x=index, height=data, *args, **kargs)
+            self.pos_bar.setOpts(x=x, height=height, *args, **kargs)
+            return
         if x is None or height is None:
             return
         if 'color' in kargs.keys():
             self.pos_bar = pg.BarGraphItem(x=x, height=height, width=0.5,
                                       pen=pg.mkPen(kargs['color']), brush=pg.mkBrush(kargs['color']))
         else:
-            self.pos_bar = pg.BarGraphItem(x=index, height=data, width=0.5)
+            self.pos_bar = pg.BarGraphItem(x=x, height=height, width=0.5)
 
         self.leftwin.plts[1].addItem(self.pos_bar)
-
+        self.leftwin.plts[1].setXRange(0, 240, padding=0)
 
 
 if __name__ == '__main__':
@@ -1026,16 +1046,19 @@ if __name__ == '__main__':
 
         #数据
         cnt = 10
-        index,data = range(cnt), np.random.rand(cnt)
+        index,data = list(range(cnt*3)), np.random.rand(cnt*3)
 
-        pl = win.plotline(x=index, y=data, pen=pg.mkPen(width=2, color=(200, 0, 0)))
-        pl2 = win.plotline(x=index, y=data, pen=pg.mkPen(width=2, color=(0, 200, 0)))
+        # pl = win.plotline(x=index, y=data, pen=pg.mkPen(width=2, color=(200, 0, 0)))
+        # pl2 = win.plotline(x=index, y=data, pen=pg.mkPen(width=2, color=(0, 200, 0)))
         win.plotbar(x=index, height=data, color=QColor(153, 0, 0, 128))
 
         index, data = range(cnt*2), np.random.rand(cnt*2)
 
-        pl.setData(x=index, y=data)
+        # pl.setData(x=index, y=data)
         win.plotbar(x=index, height=data, color=QColor(0, 204, 0, 128))
+        win.price_line.setData(x=index, y=data)
+
+        win.set_ReturnAxis_benchmark_prcie(data[0])  #计算涨跌比例
 
         # win.set_askbid_data(np.random.rand(10).tolist(),np.random.rand(10).tolist(),np.random.rand(10).tolist(),np.random.rand(10).tolist())
         win.set_askbid_data(['1', '2', '2', '2', '2', '2', '2', '2', '2', '2'],
@@ -1043,6 +1066,18 @@ if __name__ == '__main__':
                             ['1', '2', '2', '2', '2', '2', '2', '2', '2', '2'],
                             ['10', '2', '2', '2', '2', '2', '2', '2', '2', '2']
                             )
+
+        data = np.array([
+            [915,50,2,'B'],
+            [916,51,20,'B'],
+            [917,48,32,'B'],
+            [918,50,21,'s'],
+            [919,40,62,'B'],
+            [920,52,20,'B'],
+
+        ])
+        df = pd.DataFrame(data,columns=['time','order_price','vol','flag'])
+        win.set_order_data(df)
 
         win.show()
         app.exec()

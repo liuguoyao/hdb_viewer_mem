@@ -105,8 +105,7 @@ class Task(QRunnable):
             return
         threadname = threading.currentThread().name
         threadname not in g_threadids and g_threadids.insert(0, threadname)
-        # print(threadname, ' in ', g_threadids)
-        logger.debug(threadname + ' in ' + str(g_threadids))
+        # logger.debug(threadname + ' in ' + str(g_threadids))
         queue_index = g_threadids.index(threadname)
         if queue_index >= len(g_queues):
             # print("queue_index >= len(g_queues)")
@@ -180,9 +179,9 @@ class FetchData_Background_decorator(QObject):
         g_executor = None
 
 
-    def __del__(self):
-        logger.debug("FetchBackGroudD: call del .. ")
-    #     self.close()
+    # def __del__(self):
+    #     logger.debug("FetchBackGroudD: call del .. ")
+    # #     self.close()
 
 
 
@@ -195,12 +194,12 @@ def loadtest(x, **kargs):
 
 # g_readTaskOpened = None
 def snapCachRefresh( **kargs):
-    logger.debug("call snapCachRefresh .. ")
-    if 'dic' not in kargs.keys() or 'lock' not in kargs.keys():  # 快照信息
+    # logger.debug("call snapCachRefresh .. ")
+    if 'dic_security' not in kargs.keys() or 'lock' not in kargs.keys():  # 快照信息
         return []
 
     lock = kargs['lock']
-    dic_snap = kargs['dic']
+    dic_snap = kargs['dic_security']
 
     try:
         global g_config_path
@@ -216,27 +215,51 @@ def snapCachRefresh( **kargs):
         g_remoteLink.open_link()
 
         # g_remoteLink.open_read_task(0,0,0,0,['SH.688009'], ["SecurityTick"])
-        g_remoteLink.open_read_task(0,0,0,0,['SH.688009','SH.603976','SH.603977'], ["SecurityTick"])
+        g_remoteLink.open_read_task(0,0,0,0,['SH.688009','SH.603976','SH.603977'], ["SecurityTick","SZStepTrade","SHStepTrade"])
 
         header = None
         while True:
             ret, cnt = g_remoteLink.get_data_items(1)
-            time.sleep(1) #debug
-            logger.debug("snapCachRefresh get cnt:" + str(cnt))
+            time.sleep(0.1) #debug
+            # logger.debug("snapCachRefresh get cnt:" + str(cnt))
             if 0 == cnt:
                 logger.debug("snapCachRefresh sleep")
                 time.sleep(1)  # wait 1 s
             for ind, item in enumerate(ret):
-                if ind == 0 :
-                    header = list(item.total_list_value_names)
-                v = item.total_list_value
-                'recvq' in kargs.keys() and kargs['recvq'].put(int(100*ind/len(ret)))# 发送进度信息
-                symbol = v[0]
-                with lock:
-                    if symbol not in dic_snap.keys():
-                        dic_snap[symbol] = pd.DataFrame(columns = header)
-                    tmp = pd.DataFrame([item.total_list_value],columns=header,index=[symbol])
-                    dic_snap[symbol] = dic_snap[symbol].append(tmp,ignore_index=True)
+                logger.debug("Type_id:%s",item.type_id)
+                if item.type_id == 0: # HMDTickType_SecurityTick 0 沪深股债基快照数据
+                    if ind == 0 :
+                        header = list(item.total_list_value_names)
+                    v = item.total_list_value
+                    'recvq' in kargs.keys() and kargs['recvq'].put(int(100*ind/len(ret)))# 发送进度信息
+                    symbol = v[0]
+                    with lock:
+                        if symbol not in dic_snap.keys():
+                            dic_snap[symbol] = pd.DataFrame(columns = header)
+                        tmp = pd.DataFrame([item.total_list_value],columns=header,index=[symbol])
+                        dic_snap[symbol] = dic_snap[symbol].append(tmp,ignore_index=True)
+            # if item.type_id == 4:  # HMDTickType_SHStepTrade 4 上海逐笔成交数据
+            #     if ind == 0:
+            #         header = list(item.total_list_value_names)
+            #     v = item.total_list_value
+            #     'recvq' in kargs.keys() and kargs['recvq'].put(int(100 * ind / len(ret)))  # 发送进度信息
+            #     symbol = v[0]
+            #     with lock:
+            #         if symbol not in dic_snap.keys():
+            #             dic_snap[symbol] = pd.DataFrame(columns=header)
+            #         tmp = pd.DataFrame([item.total_list_value], columns=header, index=[symbol])
+            #         dic_snap[symbol] = dic_snap[symbol].append(tmp, ignore_index=True)
+            # if item.type_id == 5:  # HMDTickType_SZStepTrade 5 深圳逐笔成交数据
+            #     if ind == 0:
+            #         header = list(item.total_list_value_names)
+            #     v = item.total_list_value
+            #     'recvq' in kargs.keys() and kargs['recvq'].put(int(100 * ind / len(ret)))  # 发送进度信息
+            #     symbol = v[0]
+            #     with lock:
+            #         if symbol not in dic_snap.keys():
+            #             dic_snap[symbol] = pd.DataFrame(columns=header)
+            #         tmp = pd.DataFrame([item.total_list_value], columns=header, index=[symbol])
+            #         dic_snap[symbol] = dic_snap[symbol].append(tmp, ignore_index=True)
 
         # g_remoteLink.close_read_task()
     except Exception as e:
@@ -247,11 +270,11 @@ def snapCachRefresh( **kargs):
 def refreshUIData(**kargs):
     logger.debug("call refreshUIData .. ")
     try:
-        if 'lis' not in kargs.keys() or 'dic' not in kargs.keys() or 'lock' not in kargs.keys():  # 快照信息
+        if 'lis' not in kargs.keys() or 'dic_security' not in kargs.keys() or 'lock' not in kargs.keys():  # 快照信息
             return []
 
         lock = kargs['lock']
-        dic_snap = kargs['dic']
+        dic_snap = kargs['dic_security']
         data = kargs['lis']
         pdData = data[0]
 
