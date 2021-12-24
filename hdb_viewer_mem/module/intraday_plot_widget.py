@@ -34,11 +34,14 @@ class TimeAxis(pg.AxisItem):
                 continue
             try:
                 label = self.labels[t]
-                s = label
+                s = str(label)
             except:
                 s = " "
             strings.append(s)
         return strings
+
+    def set_time_labels(self, labels):
+        self.labels = labels
 
 
 class ReturnAxis(pg.AxisItem):
@@ -308,6 +311,8 @@ class leftPlotWidget(QWidget):
         # self.plts[0].setAxisItems({"bottom": null_axis})
         self.returnAxis = ReturnAxis(1,orientation="right")
         self.plts[0].setAxisItems({"bottom": null_axis,"right":self.returnAxis})
+        self.timeAxis = TimeAxis(labels=[], orientation="bottom")
+        self.plts[1].setAxisItems({"bottom": self.timeAxis})
 
         for vb in self.vbs[0:]:
             vb.setXLink(self.vbs[0])
@@ -596,7 +601,11 @@ class leftPlotWidget(QWidget):
         y_pos = scene_pos.y()
 
         # place time item
-        self.time_item.setHtml("<span>%.2f" % value_view_x)
+        if value_view_x>=0 and value_view_x<len(self.timeAxis.labels):
+            self.time_item.setHtml("<span>%s" % self.timeAxis.labels[int(value_view_x)])
+            self.time_item.show()
+        else:
+            self.time_item.hide()
         x_pos_label = x_pos - self.time_item.sceneBoundingRect().width() / 2
         self.time_item.setPos(x_pos_label, last_vi_rect.bottom())
 
@@ -1009,6 +1018,10 @@ class IntraDayPlotWidget(QWidget):
     def set_ReturnAxis_benchmark_prcie(self,price):
         self.leftwin.returnAxis.pre_close = price
 
+    def set_time_labels(self,labels):
+        self.leftwin.timeAxis.set_time_labels(labels)
+        self.leftwin.plts[1].showAxes("bottom")
+
     def plotline(self, x=None, y=None, *args, **kargs):
         if x is None or y is None:
             return
@@ -1060,6 +1073,7 @@ if __name__ == '__main__':
         win.price_line.setData(x=index, y=data)
 
         win.set_ReturnAxis_benchmark_prcie(data[0])  #计算涨跌比例
+        win.leftwin.timeAxis.set_time_labels([4,3,2,1,0,4,5,6,7])
 
         # win.set_askbid_data(np.random.rand(10).tolist(),np.random.rand(10).tolist(),np.random.rand(10).tolist(),np.random.rand(10).tolist())
         win.set_askbid_data(['1', '2', '2', '2', '2', '2', '2', '2', '2', '2'],

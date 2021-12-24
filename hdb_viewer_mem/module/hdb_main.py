@@ -136,6 +136,7 @@ class hdb_main_win(QMainWindow, Ui_HdbMainWin):
             return
         data = data.reset_index(drop=True)
         pre_close = data['pre_close'][0]/10000
+        intrplot.set_time_labels((data['time'].apply(lambda x:int(x/1000))).tolist())
 
         x = list(range(data.shape[0]))
         y_volume = data['volume'] - data['volume'].shift(axis=0, fill_value=0)
