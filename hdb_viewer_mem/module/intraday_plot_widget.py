@@ -950,6 +950,7 @@ class TableOrder(QWidget):
         self.df2 = df
         self.model.load(self.df2)
         self.tableView.scrollToBottom()
+        # self.tableView.scrollToTop()
 
 class rightwidget(QWidget):
     def __init__(self):

@@ -48,19 +48,19 @@ class hdb_main_win(QMainWindow, Ui_HdbMainWin):
         self.snapshotTableModel.sigdatafresh.connect(self.page2_UIdata_refresh)
         widgetpos = [(0,0),(0,1),(1,0),(1,1)]
         self.intradayplot: IntraDayPlotWidget = self.gridLayout_2.itemAtPosition(*widgetpos[0]).widget()
-        self.intradayplot.leftwin.mouse_move_sig.connect(lambda x_ind: self.refresh_askbidtable(self.intradayplot, x_ind))
+        self.intradayplot.leftwin.mouse_move_sig.connect(lambda x_ind: self.refresh_askbid_order_table(self.intradayplot, x_ind))
         # for ind in range(self.gridLayout_2.count()):
         #     intradayplot:IntraDayPlotWidget = self.gridLayout_2.itemAtPosition(*widgetpos[ind]).widget()
-        #     intradayplot.leftwin.mouse_move_sig.connect(lambda x_ind:self.refresh_askbidtable(intradayplot,x_ind))
+        #     intradayplot.leftwin.mouse_move_sig.connect(lambda x_ind:self.refresh_askbid_order_table(intradayplot,x_ind))
 
-    def refresh_askbidtable(self,intradayplot:IntraDayPlotWidget,ind):
+    def refresh_askbid_order_table(self,intradayplot:IntraDayPlotWidget,ind):
         symbol = intradayplot.rightwin.symbol_label.text()
         if symbol not in self.snapshotTableModel.manager_dic_SecurityTick.keys():
             return
-        # 获取快照数据
+        # 获取 askbid快照数据
         data: pd.DataFrame = self.snapshotTableModel.manager_dic_SecurityTick[symbol]
         data = data[data['time'] >= 93000000]  # 开盘前数据去掉
-        if len(data) < 1 or ind>(len(data)-1):
+        if len(data) < 1 or ind>(len(data)-1) or ind<0:
             return
         data = data.reset_index(drop=True)
 
@@ -70,6 +70,21 @@ class hdb_main_win(QMainWindow, Ui_HdbMainWin):
         bid_vol = data["bid_vol"][ind].tolist()
         intradayplot.set_askbid_data(ask_price,ask_vol,bid_price,bid_vol)
 
+        # 获取 trade快照数据
+        if symbol[:2] == 'SH':
+            data_order: pd.DataFrame = self.snapshotTableModel.manager_dic_SHSetpTrade[symbol]
+        elif symbol[:2] == 'SZ':
+            data_order: pd.DataFrame = self.snapshotTableModel.manager_dic_SZSetpTrade[symbol]
+        else:
+            return
+
+        data_order = data_order[['trade_time','trade_price','trade_qty','bs_flag']]
+        data_order = data_order[(data_order['trade_time']>=93000000) & (data_order['trade_time']<=data['time'][ind])]
+        data_order.loc[:, 'trade_price'] = data_order['trade_price'].apply(lambda x:x/10000)
+        data_order.loc[:, 'trade_time'] = data_order['trade_time'].apply(lambda x: int(x / 1000))
+        data_order.loc[:, 'bs_flag'] = data_order['bs_flag'].map({66: 'B', 83: 'S'})
+        data_order = data_order.reset_index(drop=True)
+        intradayplot.set_order_data(data_order)
 
     def eventFilter(self, objwatched, event):
         if(hasattr(event, "pos") ):
@@ -114,7 +129,7 @@ class hdb_main_win(QMainWindow, Ui_HdbMainWin):
         if symbol not in self.snapshotTableModel.manager_dic_SecurityTick.keys():
             return
 
-        # 获取快照数据
+        # 获取askbid快照数据
         data: pd.DataFrame = self.snapshotTableModel.manager_dic_SecurityTick[symbol]
         data = data[data['time']>=93000000]  #开盘前数据去掉
         if len(data) < 1:
@@ -134,6 +149,22 @@ class hdb_main_win(QMainWindow, Ui_HdbMainWin):
         bid_price = (data["bid_price"].values[-1]/10000).tolist()
         bid_vol = data["bid_vol"].values[-1].tolist()
         intrplot.set_askbid_data(ask_price,ask_vol,bid_price,bid_vol)
+
+        # 获取 trade快照数据
+        if symbol[:2] == 'SH':
+            data_order: pd.DataFrame = self.snapshotTableModel.manager_dic_SHSetpTrade[symbol]
+        elif symbol[:2] == 'SZ':
+            data_order: pd.DataFrame = self.snapshotTableModel.manager_dic_SZSetpTrade[symbol]
+        else:
+            return
+        data_order = data_order[['trade_time', 'trade_price', 'trade_qty', 'bs_flag']]
+        data_order = data_order[
+            (data_order['trade_time'] >= 93000000) & (data_order['trade_time'] <= data['time'].values[-1])]
+        data_order.loc[:, 'trade_price'] = data_order['trade_price'].apply(lambda x: x / 10000)
+        data_order.loc[:, 'trade_time'] = data_order['trade_time'].apply(lambda x: int(x / 1000))
+        data_order.loc[:, 'bs_flag'] = data_order['bs_flag'].map({66:'B',83:'S'})
+        data_order = data_order.reset_index(drop=True)
+        intrplot.set_order_data(data_order)
 
         pass
 

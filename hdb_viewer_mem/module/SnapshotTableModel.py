@@ -112,7 +112,10 @@ class SnapshotTableModel(QAbstractTableModel):
             self.reading = True
             logger.debug("fetchData is None or not reading")
             # self.fetchData = FetchData_Background_decorator(load2)
-            self.fetchData = FetchData_Background_decorator(snapCachRefresh,dic_security=self.manager_dic_SecurityTick)
+            self.fetchData = FetchData_Background_decorator(snapCachRefresh,
+                                                            dic_security=self.manager_dic_SecurityTick,
+                                                            dic_SHSetpTrade = self.manager_dic_SHSetpTrade,
+                                                            dic_SZSetpTrade = self.manager_dic_SZSetpTrade)
             self.fetchData.sigDataReturn.connect(self.set_custom_data_slot)
             # self.fetchData.sigProgressRate.connect(lambda v: print('PprogressRate emit rev:', v))
             # self.fetchData.sigProgressRate.connect(lambda v: print('sigProgressRate emit rev:', v))

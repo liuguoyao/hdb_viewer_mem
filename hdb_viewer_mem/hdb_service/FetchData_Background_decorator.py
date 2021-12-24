@@ -200,6 +200,8 @@ def snapCachRefresh( **kargs):
 
     lock = kargs['lock']
     dic_snap = kargs['dic_security']
+    dic_SZSetpTrade = kargs['dic_SZSetpTrade']
+    dic_SHSetpTrade = kargs['dic_SHSetpTrade']
 
     try:
         global g_config_path
@@ -226,7 +228,7 @@ def snapCachRefresh( **kargs):
                 logger.debug("snapCachRefresh sleep")
                 time.sleep(1)  # wait 1 s
             for ind, item in enumerate(ret):
-                logger.debug("Type_id:%s",item.type_id)
+                # logger.debug("Type_id:%s",item.type_id)
                 if item.type_id == 0: # HMDTickType_SecurityTick 0 沪深股债基快照数据
                     if ind == 0 :
                         header = list(item.total_list_value_names)
@@ -238,28 +240,26 @@ def snapCachRefresh( **kargs):
                             dic_snap[symbol] = pd.DataFrame(columns = header)
                         tmp = pd.DataFrame([item.total_list_value],columns=header,index=[symbol])
                         dic_snap[symbol] = dic_snap[symbol].append(tmp,ignore_index=True)
-            # if item.type_id == 4:  # HMDTickType_SHStepTrade 4 上海逐笔成交数据
-            #     if ind == 0:
-            #         header = list(item.total_list_value_names)
-            #     v = item.total_list_value
-            #     'recvq' in kargs.keys() and kargs['recvq'].put(int(100 * ind / len(ret)))  # 发送进度信息
-            #     symbol = v[0]
-            #     with lock:
-            #         if symbol not in dic_snap.keys():
-            #             dic_snap[symbol] = pd.DataFrame(columns=header)
-            #         tmp = pd.DataFrame([item.total_list_value], columns=header, index=[symbol])
-            #         dic_snap[symbol] = dic_snap[symbol].append(tmp, ignore_index=True)
-            # if item.type_id == 5:  # HMDTickType_SZStepTrade 5 深圳逐笔成交数据
-            #     if ind == 0:
-            #         header = list(item.total_list_value_names)
-            #     v = item.total_list_value
-            #     'recvq' in kargs.keys() and kargs['recvq'].put(int(100 * ind / len(ret)))  # 发送进度信息
-            #     symbol = v[0]
-            #     with lock:
-            #         if symbol not in dic_snap.keys():
-            #             dic_snap[symbol] = pd.DataFrame(columns=header)
-            #         tmp = pd.DataFrame([item.total_list_value], columns=header, index=[symbol])
-            #         dic_snap[symbol] = dic_snap[symbol].append(tmp, ignore_index=True)
+            if item.type_id == 4:  # HMDTickType_SHStepTrade 4 上海逐笔成交数据
+                if ind == 0:
+                    header = list(item.total_list_value_names)
+                v = item.total_list_value
+                symbol = v[0]
+                with lock:
+                    if symbol not in dic_SHSetpTrade.keys():
+                        dic_SHSetpTrade[symbol] = pd.DataFrame(columns=header)
+                    tmp = pd.DataFrame([item.total_list_value], columns=header, index=[symbol])
+                    dic_SHSetpTrade[symbol] = dic_SHSetpTrade[symbol].append(tmp, ignore_index=True)
+            if item.type_id == 5:  # HMDTickType_SZStepTrade 5 深圳逐笔成交数据
+                if ind == 0:
+                    header = list(item.total_list_value_names)
+                v = item.total_list_value
+                symbol = v[0]
+                with lock:
+                    if symbol not in dic_SZSetpTrade.keys():
+                        dic_SZSetpTrade[symbol] = pd.DataFrame(columns=header)
+                    tmp = pd.DataFrame([item.total_list_value], columns=header, index=[symbol])
+                    dic_SZSetpTrade[symbol] = dic_SZSetpTrade[symbol].append(tmp, ignore_index=True)
 
         # g_remoteLink.close_read_task()
     except Exception as e:
