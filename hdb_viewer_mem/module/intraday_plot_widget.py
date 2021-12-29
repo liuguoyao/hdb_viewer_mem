@@ -253,7 +253,7 @@ class leftPlotWidget(QWidget):
         # 画框架
         pg.setConfigOption('background', 'w')
         pg.setConfigOption('foreground', 'k')
-        pg.setConfigOptions(antialias=True)
+        pg.setConfigOptions(antialias=False)
 
         self.win = pg.GraphicsLayoutWidget(show=False, parent=self)
         market_layout = self.win.ci.addLayout(0, 0)
@@ -277,7 +277,7 @@ class leftPlotWidget(QWidget):
             plt.addItem(vb.v_line, ignoreBounds=True)
             plt.addItem(vb.h_line, ignoreBounds=True)
 
-            plt.setLimits(xMin=0, xMax=240)
+            # plt.setLimits(xMin=0, xMax=240)
             vb.sigXRangeChanged.connect(self.set_y_range)
             vb.key_press_sig.connect(partial(self.key_press, vb=vb))
             # vb.sigkeyPressEvent.connect(partial(self.roi_del_event, vb=vb))
@@ -313,6 +313,7 @@ class leftPlotWidget(QWidget):
         self.plts[0].setAxisItems({"bottom": null_axis,"right":self.returnAxis})
         self.timeAxis = TimeAxis(labels=[], orientation="bottom")
         self.plts[1].setAxisItems({"bottom": self.timeAxis})
+        self.plts[1].getAxis("right").setWidth(69)
 
         for vb in self.vbs[0:]:
             vb.setXLink(self.vbs[0])
@@ -569,11 +570,7 @@ class leftPlotWidget(QWidget):
             vb.h_line.show()
 
     def update_axis_text(self, scene_pos):
-        view_pos = self.vbs[0].mapSceneToView(scene_pos)
-        index = int(view_pos.x())
-        self.mouse_move_sig.emit(index)
         # scene_pos = vb.mapViewToScene(view_pos)
-
         vi_rect = self.vbs[0].sceneBoundingRect()
         last_vi_rect = self.vbs[-1].sceneBoundingRect()
         small_rect = QRectF(QPointF(vi_rect.left(),vi_rect.bottom()),
@@ -595,12 +592,16 @@ class leftPlotWidget(QWidget):
             self.price_text_item.hide()
             self.return_item.hide()
 
+        # place time item
+        view_pos = self.vbs[0].mapSceneToView(scene_pos)
+        index = int(view_pos.x())
+        self.mouse_move_sig.emit(index)
+
         value_view_y = view_pos.y()
         value_view_x = view_pos.x()
         x_pos = scene_pos.x()
         y_pos = scene_pos.y()
 
-        # place time item
         if value_view_x>=0 and value_view_x<len(self.timeAxis.labels):
             self.time_item.setHtml("<span>%s" % self.timeAxis.labels[int(value_view_x)])
             self.time_item.show()
@@ -609,15 +610,27 @@ class leftPlotWidget(QWidget):
         x_pos_label = x_pos - self.time_item.sceneBoundingRect().width() / 2
         self.time_item.setPos(x_pos_label, last_vi_rect.bottom())
 
-        # place price text item
-        self.price_text_item.setHtml("<span>%.3f" % value_view_y)
-        y_pos_label = y_pos + self.price_text_item.sceneBoundingRect().height() / 2
-        self.price_text_item.setPos(vi_rect.left(), y_pos_label)
+        if self.vbs[0].sceneBoundingRect().contains(scene_pos):  # price plot
+            # place price text item
+            self.price_text_item.setHtml("<span>%.3f" % value_view_y)
+            y_pos_label = y_pos + self.price_text_item.sceneBoundingRect().height() / 2
+            self.price_text_item.setPos(vi_rect.left(), y_pos_label)
 
-        # place return item
-        self.return_item.setHtml("<span>%.2f%%" % (value_view_y*100/self.returnAxis.pre_close - 100))
-        y_pos_label = y_pos + self.return_item.sceneBoundingRect().height() / 2
-        self.return_item.setPos(vi_rect.right(), y_pos_label)
+            # place return item
+            self.return_item.setHtml("<span>%.2f%%" % (value_view_y*100/self.returnAxis.pre_close - 100))
+            y_pos_label = y_pos + self.return_item.sceneBoundingRect().height() / 2
+            self.return_item.setPos(vi_rect.right(), y_pos_label)
+
+        if self.vbs[1].sceneBoundingRect().contains(scene_pos): # vol plot
+            view_pos = self.vbs[1].mapSceneToView(scene_pos)
+            # place vol text item
+            self.price_text_item.setHtml("<span>%d" % int(view_pos.y()))
+            y_pos_label = y_pos + self.price_text_item.sceneBoundingRect().height() / 2
+            self.price_text_item.setPos(vi_rect.left(), y_pos_label)
+
+            #hide return item
+            self.return_item.hide()
+            pass
 
     def key_press(self, mv_step, zoom_step, vb):
         if mv_step != 0:
@@ -724,9 +737,9 @@ class MyTableBSDelegate(QStyledItemDelegate):
         if c<1:
             option.rect.adjust(-3, 0, 0, 0)
         super(MyTableBSDelegate, self).paint(painter, option, index)
-        if 10 == r:
+        if 10 == r or 0 == r or 20 == r:
             painter.drawLine(x, y, x + w, y)
-        if 1 == c:
+        if 1 == c or 0 == c or 4 ==c:
             painter.drawLine(x, y, x, y + h)
 
 
@@ -850,6 +863,8 @@ class TableBS(QWidget):
 
         self.model = PandasModelBS(self.df2)
         self.tableView = QTableView()
+        self.tableView.setSelectionBehavior(QTableView.SelectRows)
+        self.tableView.setFocusPolicy(QtCore.Qt.NoFocus)
         self.tableView.setModel(self.model)
         fm = QFontMetrics(QApplication.font())
 
@@ -929,12 +944,15 @@ class TableOrder(QWidget):
 
         self.model = PandasModel(self.df2)
         self.tableView = QTableView()
+        self.tableView.setFocusPolicy(QtCore.Qt.NoFocus)
+        self.tableView.horizontalHeader().setHighlightSections(False)
         self.tableView.setModel(self.model)
 
         self.tableView.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         # self.tableView.horizontalHeader().setSectionResizeMode(QHeaderView.Fixed)
         # self.tableView.horizontalHeader().setStretchLastSection(True)
         self.tableView.verticalHeader().hide()
+        self.tableView.setSelectionBehavior(QTableView.SelectRows)
         # self.tableView.setFrameShape(QFrame.NoFrame)
         # self.tableView.horizontalHeader().hide()
         # for row in range(2):
@@ -965,6 +983,8 @@ class rightwidget(QWidget):
     def __init__(self):
         super(rightwidget, self).__init__()
         self.vblayout = QVBoxLayout()
+        self.vblayout.setContentsMargins(0,0,0,0)
+        self.vblayout.setSpacing(0)
 
         self.symbol_label = QLabel("symbolname")
         self.vblayout.addWidget(self.symbol_label)
@@ -981,10 +1001,13 @@ class rightwidget(QWidget):
         self.ordertable.setFixedWidth(self.askbidtable.width())
         
 class IntraDayPlotWidget(QWidget):
+    leftwin_mouse_move_sig = pyqtSignal(object)
     def __init__(self):
         super(IntraDayPlotWidget, self).__init__()
         #添加窗口部件
         self.hblayout = QHBoxLayout()
+        self.hblayout.setSpacing(0)
+        self.hblayout.setContentsMargins(0,0,0,0)
 
         self.leftwin = leftPlotWidget()
         self.hblayout.addWidget(self.leftwin)
@@ -1001,7 +1024,8 @@ class IntraDayPlotWidget(QWidget):
         self.price_line = self.leftwin.plts[0].plot(pen = pg.mkPen(width=2, color=(200, 0, 0)))
 
         #signal slot
-        # self.leftwin.mouse_move_sig.connect(lambda x :print(x))
+        self.leftwin.mouse_move_sig.connect(lambda x :self.leftwin_mouse_move_sig.emit((self,x)))
+
 
     def set_symbolname(self,name):
         self.rightwin.symbol_label.setText(name)
@@ -1025,7 +1049,7 @@ class IntraDayPlotWidget(QWidget):
     def plotline(self, x=None, y=None, *args, **kargs):
         if x is None or y is None:
             return
-        self.leftwin.plts[0].setXRange(0, 240, padding=0)
+        # self.leftwin.plts[0].setXRange(0, 240, padding=0)
 
         if 'pen' in kargs.keys():
             return self.leftwin.plts[0].plot(x=x, y=y, pen=kargs['pen'])
@@ -1047,7 +1071,14 @@ class IntraDayPlotWidget(QWidget):
             self.pos_bar = pg.BarGraphItem(x=x, height=height, width=0.5)
 
         self.leftwin.plts[1].addItem(self.pos_bar)
-        self.leftwin.plts[1].setXRange(0, 240, padding=0)
+        # self.leftwin.plts[1].setXRange(0, 240, padding=0)
+
+    def setXRange(self,min,max):
+        self.leftwin.plts[0].setXRange(min,max)
+
+    def setLimits(self, xMin, xMax):
+        self.leftwin.plts[0].setLimits(xMin=xMin, xMax=xMax)
+        self.leftwin.plts[1].setLimits(xMin=xMin, xMax=xMax)
 
 
 if __name__ == '__main__':
@@ -1073,7 +1104,7 @@ if __name__ == '__main__':
         win.price_line.setData(x=index, y=data)
 
         win.set_ReturnAxis_benchmark_prcie(data[0])  #计算涨跌比例
-        win.leftwin.timeAxis.set_time_labels([4,3,2,1,0,4,5,6,7])
+        win.leftwin.timeAxis.set_time_labels(["01","02","03","04","005","006",5,6,7])
 
         # win.set_askbid_data(np.random.rand(10).tolist(),np.random.rand(10).tolist(),np.random.rand(10).tolist(),np.random.rand(10).tolist())
         win.set_askbid_data(['1', '2', '2', '2', '2', '2', '2', '2', '2', '2'],
@@ -1093,6 +1124,10 @@ if __name__ == '__main__':
         ])
         df = pd.DataFrame(data,columns=['time','order_price','vol','flag'])
         win.set_order_data(df)
+
+        win.setXRange(0,10)
+        win.setLimits(0,40)
+
 
         win.show()
         app.exec()

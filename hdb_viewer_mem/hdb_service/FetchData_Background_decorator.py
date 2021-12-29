@@ -207,61 +207,85 @@ def snapCachRefresh( **kargs):
         global g_config_path
         # config_path = r"./config/system_config.ini"
         initmap = config_ini_key_value(keys=[],config_file=g_config_path)
-        g_hdbclient = HdbClient(initmap['his_svr_addr'], initmap['his_srv_port'],
-                                initmap['his_user'], initmap['his_pwd'],
-                                initmap["file_path"])
-        ret = g_hdbclient.open_client()
-        if ret <= 0:
-            logger.exception("open_client ERR:")
-        g_remoteLink = HdbRemoteLinkItem(g_hdbclient, "memory/marketdata", "tick_20230807")
-        g_remoteLink.open_link()
+        today = int(time.strftime("%Y%m%d"))
+        curtime = 93000000
+        tickname = "tick_" + time.strftime("%Y%m%d")
+        today = 20200113  # test
+        tickname = "tick_20230807"  # test
+        symbols = initmap['symbols'].split(',')
 
-        # g_remoteLink.open_read_task(0,0,0,0,['SH.688009'], ["SecurityTick"])
-        g_remoteLink.open_read_task(0,0,0,0,['SH.688009','SH.603976','SH.603977'], ["SecurityTick","SZStepTrade","SHStepTrade"])
 
-        header = None
+
+        #先读取本地数据
+
+        #再从服务器 读取剩余部分
         while True:
-            ret, cnt = g_remoteLink.get_data_items(1)
-            time.sleep(0.1) #debug
-            # logger.debug("snapCachRefresh get cnt:" + str(cnt))
-            if 0 == cnt:
-                logger.debug("snapCachRefresh sleep")
-                time.sleep(1)  # wait 1 s
-            for ind, item in enumerate(ret):
-                # logger.debug("Type_id:%s",item.type_id)
-                if item.type_id == 0: # HMDTickType_SecurityTick 0 沪深股债基快照数据
-                    if ind == 0 :
-                        header = list(item.total_list_value_names)
-                    v = item.total_list_value
-                    'recvq' in kargs.keys() and kargs['recvq'].put(int(100*ind/len(ret)))# 发送进度信息
-                    symbol = v[0]
-                    with lock:
-                        if symbol not in dic_snap.keys():
-                            dic_snap[symbol] = pd.DataFrame(columns = header)
-                        tmp = pd.DataFrame([item.total_list_value],columns=header,index=[symbol])
-                        dic_snap[symbol] = dic_snap[symbol].append(tmp,ignore_index=True)
-            if item.type_id == 4:  # HMDTickType_SHStepTrade 4 上海逐笔成交数据
-                if ind == 0:
-                    header = list(item.total_list_value_names)
-                v = item.total_list_value
-                symbol = v[0]
-                with lock:
-                    if symbol not in dic_SHSetpTrade.keys():
-                        dic_SHSetpTrade[symbol] = pd.DataFrame(columns=header)
-                    tmp = pd.DataFrame([item.total_list_value], columns=header, index=[symbol])
-                    dic_SHSetpTrade[symbol] = dic_SHSetpTrade[symbol].append(tmp, ignore_index=True)
-            if item.type_id == 5:  # HMDTickType_SZStepTrade 5 深圳逐笔成交数据
-                if ind == 0:
-                    header = list(item.total_list_value_names)
-                v = item.total_list_value
-                symbol = v[0]
-                with lock:
-                    if symbol not in dic_SZSetpTrade.keys():
-                        dic_SZSetpTrade[symbol] = pd.DataFrame(columns=header)
-                    tmp = pd.DataFrame([item.total_list_value], columns=header, index=[symbol])
-                    dic_SZSetpTrade[symbol] = dic_SZSetpTrade[symbol].append(tmp, ignore_index=True)
+            g_hdbclient = HdbClient(initmap['his_svr_addr'], initmap['his_srv_port'],
+                                    initmap['his_user'], initmap['his_pwd'],
+                                    initmap["file_path"])
+            ret = g_hdbclient.open_client()
+            if ret <= 0:
+                logger.exception("open_client ERR:")
 
-        # g_remoteLink.close_read_task()
+            g_remoteLink = HdbRemoteLinkItem(g_hdbclient, "memory/marketdata", tickname)
+            g_remoteLink.open_link()
+
+            # g_remoteLink.open_read_task(0,0,0,0,['SH.688009','SH.603976','SH.603977'], ["SecurityTick","SZStepTrade","SHStepTrade"])
+            g_remoteLink.open_read_task(today,curtime,today,150000000,symbols, ["SecurityTick","SZStepTrade","SHStepTrade"])
+            logger.debug("open_read_task:%s",curtime)
+
+            header = None
+            while True:
+                try:
+                    ret, cnt = g_remoteLink.get_data_items(1)
+                    # time.sleep(0.1) #debug
+                    # logger.debug("snapCachRefresh get cnt:" + str(cnt))
+                    if 0 == cnt:
+                        logger.debug("snapCachRefresh sleep")
+                        time.sleep(1)  # wait 1 s
+                    for ind, item in enumerate(ret):
+                        # logger.debug("Type_id:%s",item.type_id)
+                        if item.type_id == 0: # HMDTickType_SecurityTick 0 沪深股债基快照数据
+                            if ind == 0 :
+                                header = list(item.total_list_value_names)
+                            v = item.total_list_value
+                            'recvq' in kargs.keys() and kargs['recvq'].put(int(100*ind/len(ret)))# 发送进度信息
+                            symbol = v[0]
+                            curtime = v[6]
+                            with lock:
+                                if symbol not in dic_snap.keys():
+                                    dic_snap[symbol] = pd.DataFrame(columns = header)
+                                tmp = pd.DataFrame([item.total_list_value],columns=header,index=[symbol])
+                                dic_snap[symbol] = dic_snap[symbol].append(tmp,ignore_index=True)
+                        if item.type_id == 4:  # HMDTickType_SHStepTrade 4 上海逐笔成交数据
+                            if ind == 0:
+                                header = list(item.total_list_value_names)
+                            v = item.total_list_value
+                            symbol = v[0]
+                            with lock:
+                                if symbol not in dic_SHSetpTrade.keys():
+                                    dic_SHSetpTrade[symbol] = pd.DataFrame(columns=header)
+                                tmp = pd.DataFrame([item.total_list_value], columns=header, index=[symbol])
+                                dic_SHSetpTrade[symbol] = dic_SHSetpTrade[symbol].append(tmp, ignore_index=True)
+                        if item.type_id == 5:  # HMDTickType_SZStepTrade 5 深圳逐笔成交数据
+                            if ind == 0:
+                                header = list(item.total_list_value_names)
+                            v = item.total_list_value
+                            symbol = v[0]
+                            with lock:
+                                if symbol not in dic_SZSetpTrade.keys():
+                                    dic_SZSetpTrade[symbol] = pd.DataFrame(columns=header)
+                                tmp = pd.DataFrame([item.total_list_value], columns=header, index=[symbol])
+                                dic_SZSetpTrade[symbol] = dic_SZSetpTrade[symbol].append(tmp, ignore_index=True)
+                except Exception as e:
+                    logger.exception("In While Exception:")
+                    logger.exception(e)
+                    time.sleep(2)
+                    g_remoteLink.close_read_task()
+                    # g_remoteLink.close_link()
+                    g_hdbclient.close_client()
+                    break
+            # g_remoteLink.close_read_task()
     except Exception as e:
         logger.exception("snapCachRefresh Exception:")
         logger.exception(e)

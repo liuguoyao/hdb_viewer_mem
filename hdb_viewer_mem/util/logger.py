@@ -2,6 +2,7 @@ import os
 import logging
 import threading
 import logging.handlers
+from concurrent_log_handler import ConcurrentRotatingFileHandler
 
 initLock = threading.Lock()
 rootLoggerInitialized = False
@@ -24,7 +25,8 @@ def init_logger(logger):
     if file_log is not None:
         file_dir = os.path.dirname(os.path.abspath(file_log))
         os.makedirs(file_dir, exist_ok=True)
-        file_handler = logging.handlers.TimedRotatingFileHandler(file_log, when="D", interval=1, backupCount=30)
+        # file_handler = logging.handlers.TimedRotatingFileHandler(file_log, when="D", interval=1, backupCount=30)
+        file_handler = ConcurrentRotatingFileHandler(file_log, "a", 4 *1024 * 1024, 5)
         init_handler(file_handler)
         logger.addHandler(file_handler)
 
