@@ -56,7 +56,7 @@ class hdb_main_win(QMainWindow, Ui_HdbMainWin):
         self.sigproxylist = []
         for ind in range(self.gridLayout_2.count()):
             intradayplot:IntraDayPlotWidget = self.gridLayout_2.itemAtPosition(*self.widgetpos[ind]).widget()
-            proxy = pg.SignalProxy(intradayplot.leftwin_mouse_move_sig, rateLimit=4, slot=self.mousemove_refresh_askbid_order_table_slot)
+            proxy = pg.SignalProxy(intradayplot.leftwin_mouse_move_sig, rateLimit=30, slot=self.mousemove_refresh_askbid_order_table_slot)
             self.sigproxylist.append(proxy)
 
     def slot_actionmulwins(self):
@@ -284,7 +284,9 @@ class hdb_main_win(QMainWindow, Ui_HdbMainWin):
         headernames = self.snapshotTableModel.headerNames()
         logger.debug(headernames)
 
-        self.headerConfigWin = HeaderConfigSnapshotTable(headerNames=headernames)
+        configfile_path = r"./config/system_config.ini"
+        initmap = config_ini_key_value(keys=[], config_file=configfile_path)
+        self.headerConfigWin = HeaderConfigSnapshotTable(headerNames=initmap['header_show'].split(","), headerNames_hide=initmap['header_hide'].split(","))
         self.headerConfigWin.show()
 
 

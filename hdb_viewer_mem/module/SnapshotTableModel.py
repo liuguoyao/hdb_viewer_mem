@@ -130,14 +130,20 @@ class SnapshotTableModel(QAbstractTableModel):
         pass
 
     def refreshUI_slot(self, result_list):
+        ml = self.manager_list[0]
+        if len(ml)==0:
+            return
+        # filter clumns
+        initmap = config_ini_key_value(keys=[], config_file=r"./config/system_config.ini")
+        self._data = ml[initmap["header_show"].split(',')]
 
         self._background_color = []
         self._foreground_color = []
-        rows, cls = self.manager_list[0].shape[0],self.manager_list[0].shape[1]
+        rows, cls = self._data.shape[0],self._data.shape[1]
         for rowidx in range(rows):
             self._background_color.append([QBrush(QColor(255, 255, 255)) for i in range(cls)])
             self._foreground_color.append([QBrush(QColor(0, 100, 200)) for i in range(cls)])
-        self._data = self.manager_list[0]
+
         self.layoutChanged.emit()
         self.sigdatafresh.emit()
         pass
