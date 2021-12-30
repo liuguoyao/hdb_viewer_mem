@@ -249,7 +249,7 @@ def snapCachRefresh( **kargs):
                             if ind == 0 :
                                 header = list(item.total_list_value_names)
                             v = item.total_list_value
-                            'recvq' in kargs.keys() and kargs['recvq'].put(int(100*ind/len(ret)))# 发送进度信息
+                            # 'recvq' in kargs.keys() and kargs['recvq'].put(int(100*ind/len(ret)))# 发送进度信息
                             symbol = v[0]
                             curtime = v[6]
                             with lock:
@@ -292,7 +292,7 @@ def snapCachRefresh( **kargs):
     return []
 
 def refreshUIData(**kargs):
-    logger.debug("call refreshUIData .. ")
+    logger.debug("page1 call refreshUIData .. ")
     try:
         if 'lis' not in kargs.keys() or 'dic_security' not in kargs.keys() or 'lock' not in kargs.keys():  # 快照信息
             return []
