@@ -99,7 +99,7 @@
      <x>0</x>
      <y>0</y>
      <width>647</width>
-     <height>22</height>
+     <height>26</height>
     </rect>
    </property>
    <widget class="QMenu" name="menu">
@@ -140,6 +140,8 @@
    <addaction name="action_forward"/>
    <addaction name="action_config"/>
    <addaction name="actionmulwins"/>
+   <addaction name="action_up"/>
+   <addaction name="action_down"/>
   </widget>
   <widget class="QStatusBar" name="statusBar"/>
   <action name="action_config">
@@ -203,6 +205,16 @@
    </property>
    <property name="shortcut">
     <string>Right</string>
+   </property>
+  </action>
+  <action name="action_up">
+   <property name="text">
+    <string>up</string>
+   </property>
+  </action>
+  <action name="action_down">
+   <property name="text">
+    <string>down</string>
    </property>
   </action>
  </widget>

@@ -100,8 +100,8 @@ class CustomViewBox(pg.ViewBox):
             return
         if self.draw_line_flag:
             if ev.isStart():
-                p0 = self.mapToView(ev.buttonDownPos())
-                p1 = self.mapToView(ev.pos())
+                p0 = self.mapDeviceToView(ev.buttonDownPos())
+                p1 = self.mapDeviceToView(ev.pos())
                 self.draw_line = pg.PolyLineROI([p0, p1], pen=(5),movable=False)
                 self.Text = pg.TextItem(border='w', fill=(255, 255, 255, 150))
                 self.Text.setAnchor((1,0))
@@ -112,8 +112,8 @@ class CustomViewBox(pg.ViewBox):
                 self.addItem(self.Text,ignoreBounds=True)
                 self.lines.append((self.draw_line,self.Text))
             else:
-                p0 = self.mapToView(ev.buttonDownPos())
-                p1 = self.mapToView(ev.pos())
+                p0 = self.mapDeviceToView(ev.buttonDownPos())
+                p1 = self.mapDeviceToView(ev.pos())
                 self.draw_line.movePoint(-1, p1)
                 self.Text.setPos(p1)
                 self.Text.setHtml('''<p> <span style="color:#000000;">{:.3f}%</span> </p>'''.format(p1.y() * 100 / p0.y() - 100))
@@ -131,14 +131,20 @@ class CustomViewBox(pg.ViewBox):
         self.Text.setHtml('''<p> <span style="color:#000000;">{:.3f}%</span> </p>'''.format(p1.y() * 100 / p0.y() - 100))
 
     def wheelEvent(self, ev, axis=None):
-        view_range = self.viewRange()
-        x_range = view_range[0][1] - view_range[0][0]
-        x_min_range = self.state['limits']['xRange'][0]
-        if x_min_range is not None and ev.delta() > 0:
-            if x_range <= x_min_range:
-                ev.ignore()
-                return
-        super(CustomViewBox, self).wheelEvent(ev, axis)
+        if axis in (0, 1):
+            mask = [False, False]
+            mask[axis] = self.state['mouseEnabled'][axis]
+        else:
+            mask = self.state['mouseEnabled'][:]
+        s = 1.02 ** (ev.delta() * self.state['wheelScaleFactor']) # actual scaling factor
+        s = [(None if m is False else s) for m in mask]
+        center = self.mapDeviceToView(ev.pos())
+
+        self._resetTarget()
+        self.scaleBy(s, center)
+        ev.accept()
+        self.sigRangeChangedManually.emit(mask)
+
 
     def keyPressEvent(self, ev):
         mv_step = 0
@@ -159,9 +165,20 @@ class CustomViewBox(pg.ViewBox):
             zoom_step = 1
 
         self.key_press_sig.emit(mv_step, zoom_step)
-        if ev.key() in [QtCore.Qt.Key_Backspace,QtCore.Qt.Key_Delete]:
-            self.sigkeyPressEvent.emit(ev.key())
-            ev.accept()
+        # if ev.key() in [QtCore.Qt.Key_Backspace,QtCore.Qt.Key_Delete]:
+        #     self.sigkeyPressEvent.emit(ev.key())
+        #     ev.accept()
+        if ev.key() == QtCore.Qt.Key_Backspace:
+            if len(self.lines)>0:
+                itemline, textitem = self.lines.pop()
+                itemline.hide()
+                textitem.hide()
+        if ev.key() == QtCore.Qt.Key_Delete:
+            for v in self.lines:
+                itemline, textitem = v
+                itemline.hide()
+                textitem.hide()
+            self.lines.clear()
 
     def updateAutoRange(self):
         ## Break recursive loops when auto-ranging.
@@ -247,6 +264,10 @@ class leftPlotWidget(QWidget):
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.layout.setSpacing(0)
         self.setLayout(self.layout)
+
+        self.symbol_label = QLabel("Symbol")
+        self.layout.addWidget(self.symbol_label)
+
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
         self.setSizePolicy(sizePolicy)
 
@@ -334,215 +355,10 @@ class leftPlotWidget(QWidget):
         self.layout.addWidget(self.win)
         #填数据
 
-    # def show_selectd(self, indexs):
-    #     if self.plts is None:
-    #         return
-    #     if len(self.plts) >= len(indexs):
-    #         for i in range(len(self.plts)):
-    #             if i in indexs:
-    #                 self.plts[i].show()
-    #             else:
-    #                 self.plts[i].hide()
-
     def clear_plot(self):
         if self.plts is not None:
             for plt in self.plts:
                 plt.clear()
-
-    # def plot(self):
-    #     if self.tick_df is None or self.order_df is None or self.trade_df is None:
-    #         return
-    #
-    #     tick_labels = self.tick_df["tick_time"].dt.strftime("%H:%M:%S")
-    #     self.labels = tick_labels
-    #
-    #     self.sync_plots()
-    #
-    #     cur_plot = self.plts[g_SecurityK]
-    #     # plot price
-    #     match_price = self.tick_df["match"] / 10000
-    #
-    #     pre_close = self.tick_df.iloc[0]["pre_close"] / 10000
-    #     self.pre_close = pre_close
-    #
-    #     return_axis = ReturnAxis(pre_close, orientation='right')
-    #     cur_plot.setAxisItems({"right": return_axis})
-    #     cur_plot.plot(x=range(len(match_price)), y=match_price, pen=pg.mkPen(width=2, color=(200, 200, 255)))
-    #     cur_plot.showAxis('right')
-    #
-    #     # plot line
-    #     # cur_plot.plot(y=(pre_close * 2 - match_price), pen=pg.mkPen(color=(0, 0, 0, 0)))  # plot y数据相对pre_close对称
-    #
-    #     h_line = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen(width=1, color=QColor(0, 0, 0, 128), style=QtCore.Qt.DashLine))
-    #     cur_plot.addItem(h_line, ignoreBounds=True)
-    #
-    #     h_line.setPos(pre_close)
-    #     for lb in ['09:30:00', '10:30:00', '11:30:00', '14:00:00', '15:00:00']:
-    #         x_pos = tick_labels.to_list().index(lb)
-    #         for plt in self.plts:
-    #             v_line = pg.InfiniteLine(angle=90, movable=False, pen=pg.mkPen(width=1, color=QColor(0, 0, 0, 128), style=QtCore.Qt.DashLine))
-    #             plt.addItem(v_line, ignoreBounds=True)
-    #             v_line.setPos(x_pos)
-    #
-    #     # plot order
-    #     if len(self.order_df) != 0:
-    #         order_x_value = self.order_df["time_index"].map(lambda x:
-    #                                                         self.tick_df.loc[self.tick_df['time_index'] == x].index[0])
-    #         self.order_df["x_value"] = order_x_value
-    #
-    #         bid_order = self.order_df.loc[self.order_df["side"] == 1]
-    #         ask_order = self.order_df.loc[self.order_df["side"] == 2]
-    #
-    #         bid_order.reset_index(drop=True, inplace=True)
-    #         ask_order.reset_index(drop=True, inplace=True)
-    #         cur_plot.setClipToView(False)
-    #
-    #         if len(bid_order) > 0:
-    #             cur_plot.plot(x=bid_order["x_value"], y=bid_order["price"] / 10000,
-    #                           symbol="o", symbolSize=15, symbolBrush=(255, 0, 0, 64), pen=None)
-    #         if len(ask_order) > 0:
-    #             cur_plot.plot(x=ask_order["x_value"], y=ask_order["price"] / 10000,
-    #                           symbol="o", symbolSize=15, symbolBrush=(0, 0, 255, 64), pen=None)
-    #     # plot trade
-    #     if len(self.trade_df) != 0:
-    #         trade_x_value = self.trade_df["time_index"].map(lambda x:
-    #                                                         self.tick_df.loc[self.tick_df['time_index'] == x].index[0])
-    #         self.trade_df["x_value"] = trade_x_value
-    #         bid_trade = self.trade_df.loc[self.trade_df["side"] == 1]
-    #         ask_trade = self.trade_df.loc[self.trade_df["side"] == 2]
-    #         bid_trade.reset_index(drop=True, inplace=True)
-    #         ask_trade.reset_index(drop=True, inplace=True)
-    #
-    #         cur_plot.setClipToView(False)
-    #
-    #         if len(bid_trade) > 0:
-    #             cur_plot.plot(x=bid_trade["x_value"], y=bid_trade["price"] / 10000,
-    #                           symbol="t1", symbolSize=14, symbolBrush=(255, 0, 0, 200), pen=None)
-    #         if len(ask_trade) > 0:
-    #             cur_plot.plot(x=ask_trade["x_value"], y=ask_trade["price"] / 10000,
-    #                           symbol="t", symbolSize=14, symbolBrush=(0, 0, 0, 200), pen=None)
-    #
-    #         pnl_df, pos_df = self.generate_pnl(self.commission_ratio)
-    #         cur_plot = self.plts[g_P_L]
-    #         cur_plot.plot(x=pnl_df.index, y=pnl_df, pen=pg.mkPen(width=2, color=(200, 200, 255)))
-    #
-    #         cur_plot = self.plts[g_Position]
-    #         color = QColor(153, 204, 255, 128)
-    #         pos_bar = pg.BarGraphItem(x=pos_df.index, height=pos_df, width=0.5,
-    #                                   pen=pg.mkPen(color), brush=pg.mkBrush(color))
-    #         cur_plot.addItem(pos_bar)
-    #
-    #     #plot volume
-    #     cur_plot = self.plts[g_Volum]
-    #     volume = self.tick_df["volume"] - self.tick_df["volume"].shift(1)
-    #     color = QColor(153, 204, 255, 128)
-    #     volume_bar = pg.BarGraphItem(x=range(len(self.tick_df)), height=volume, width=0.5,
-    #                                  pen=pg.mkPen(color), brush=pg.mkBrush(color))
-    #     cur_plot.addItem(volume_bar)
-    #
-    #     self.plts[g_SecurityK].setLabel("right", r"行情")
-    #     self.plts[g_SecurityK2].setLabel("right", r"行情2")
-    #     self.plts[g_Volum].setLabel("right", r"交易量")
-    #     self.plts[g_P_L].setLabel("right", "P&L")
-    #     self.plts[g_Position].setLabel("right", r"持仓")
-    #
-    #     self.plts[g_SecurityK2].hide()
-
-    # def plot_securityK2(self, order_df, trade_df):
-    #     if self.tick_df is None or order_df is None or trade_df is None:
-    #         return
-    #
-    #     cur_plot = self.plts[g_SecurityK2]
-    #     cur_plot.plot(clear=True)
-    #     v_line = pg.InfiniteLine(angle=90, movable=False)
-    #     h_line = pg.InfiniteLine(angle=0, movable=False)
-    #     cur_plot.addItem(v_line, ignoreBounds=True)
-    #     cur_plot.addItem(h_line, ignoreBounds=True)
-    #     self.vbs[g_SecurityK2].v_line = v_line
-    #     self.vbs[g_SecurityK2].h_line = h_line
-    #
-    #     tick_labels = self.tick_df["tick_time"].dt.strftime("%H:%M:%S")
-    #     self.labels = tick_labels
-    #
-    #     # plot price
-    #     match_price = self.tick_df["match"] / 10000
-    #     pre_close = self.tick_df.iloc[0]["pre_close"] / 10000
-    #     self.pre_close = pre_close
-    #
-    #     return_axis = ReturnAxis(pre_close, orientation='right')
-    #     cur_plot.setAxisItems({"right": return_axis})
-    #     cur_plot.plot(x=range(len(match_price)), y=match_price, pen=pg.mkPen(width=2, color=(200, 200, 255)))
-    #     cur_plot.showAxis('right')
-    #
-    #     h_line = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen(width=1, color=QColor(0, 0, 0, 128), style=QtCore.Qt.DashLine))
-    #     cur_plot.addItem(h_line, ignoreBounds=True)
-    #
-    #     h_line.setPos(pre_close)
-    #     for lb in ['09:30:00', '10:30:00', '11:30:00', '14:00:00', '15:00:00']:
-    #         x_pos = tick_labels.to_list().index(lb)
-    #         for plt in self.plts:
-    #             v_line = pg.InfiniteLine(angle=90, movable=False, pen=pg.mkPen(width=1, color=QColor(0, 0, 0, 128), style=QtCore.Qt.DashLine))
-    #             plt.addItem(v_line, ignoreBounds=True)
-    #             v_line.setPos(x_pos)
-    #
-    #     # plot order
-    #     if len(order_df) != 0:
-    #         order_x_value = order_df["time_index"].map(lambda x:
-    #                                                         self.tick_df.loc[self.tick_df['time_index'] == x].index[0])
-    #         order_df["x_value"] = order_x_value
-    #
-    #         bid_order = order_df.loc[order_df["side"] == 1]
-    #         ask_order = order_df.loc[order_df["side"] == 2]
-    #         bid_order.reset_index(drop=True, inplace=True)
-    #         ask_order.reset_index(drop=True, inplace=True)
-    #         if len(bid_order) > 0:
-    #             cur_plot.plot(x=bid_order["x_value"], y=bid_order["price"] / 10000,
-    #                           symbol="o", symbolSize=15, symbolBrush=(255, 0, 0, 64), pen=None)
-    #         if len(ask_order) > 0:
-    #             cur_plot.plot(x=ask_order["x_value"], y=ask_order["price"] / 10000,
-    #                           symbol="o", symbolSize=15, symbolBrush=(0, 0, 255, 64), pen=None)
-    #     # plot trade
-    #     if len(trade_df) != 0:
-    #         trade_x_value = trade_df["time_index"].map(lambda x:
-    #                                                         self.tick_df.loc[self.tick_df['time_index'] == x].index[0])
-    #
-    #         trade_df["x_value"] = trade_x_value
-    #         bid_trade = trade_df.loc[trade_df["side"] == 1]
-    #         ask_trade = trade_df.loc[trade_df["side"] == 2]
-    #         bid_trade.reset_index(drop=True, inplace=True)
-    #         ask_trade.reset_index(drop=True, inplace=True)
-    #         if len(bid_trade) > 0:
-    #             cur_plot.plot(x=bid_trade["x_value"], y=bid_trade["price"] / 10000,
-    #                           symbol="t1", symbolSize=14, symbolBrush=(255, 0, 0, 200), pen=None)
-    #         if len(ask_trade) > 0:
-    #             cur_plot.plot(x=ask_trade["x_value"], y=ask_trade["price"] / 10000,
-    #                           symbol="t", symbolSize=14, symbolBrush=(0, 0, 0, 200), pen=None)
-    #     cur_plot.setLabel("right", r"行情2")
-
-    # def sync_plots(self):
-    #     # sync the plot x range
-    #     for vb in self.vbs:
-    #         vb.setXRange(-5, len(self.tick_df) + 5)
-    #     last_plt = self.plts[-1]
-    #     x_axis = TimeAxis(self.labels, orientation='bottom')
-    #     last_plt.setAxisItems({"bottom": x_axis})
-    #     if len(self.plts) > 1:
-    #         for plt in self.plts[:-1]:
-    #             null_axis = SpaceAxis(0, orientation='bottom')
-    #             null_axis.setHeight(1)
-    #             plt.setAxisItems({"bottom": null_axis})
-    #             plt.showAxis("bottom")
-    #
-    #         for plt in self.plts[1:]:
-    #             null_axis = SpaceAxis(8, orientation='right')
-    #             plt.setAxisItems({"right": null_axis})
-    #             plt.showAxis("right")
-    #
-    #     for plt in self.plts:
-    #         null_axis = SpaceAxis(0, orientation='top')
-    #         null_axis.setHeight(0)
-    #         plt.setAxisItems({"top": null_axis})
-    #         plt.showAxis("top")
 
     def mouse_move(self, evt):
         pos = evt[0]  ## using signal proxy turns original arguments into a tuple
@@ -1029,6 +845,7 @@ class IntraDayPlotWidget(QWidget):
 
     def set_symbolname(self,name):
         self.rightwin.symbol_label.setText(name)
+        self.leftwin.symbol_label.setText(name)
         pass
 
     def set_askbid_data(self,askprice, askvol, bidprice, bidvol):

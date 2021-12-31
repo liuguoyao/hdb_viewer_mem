@@ -20,6 +20,10 @@ class hdb_main_win(QMainWindow, Ui_HdbMainWin):
         super(hdb_main_win, self).__init__(parent)
         self.setupUi(self)
 
+        inimap = config_ini_key_value(keys=[], config_file=r"./config/system_config.ini")
+        self.symbollist = inimap["symbols"].split(',')
+        self.symbollist_showind = 0
+
         #安装捕获应用事件
         self.installEventFilter(self)
 
@@ -28,6 +32,10 @@ class hdb_main_win(QMainWindow, Ui_HdbMainWin):
         self.action_forward.triggered.connect(self.forward)
         self.action_config.triggered.connect(self.pop_sysconfigwin)
         self.actionmulwins.triggered.connect(self.slot_actionmulwins)
+        self.action_up.triggered.connect(self.slot_action_up)
+        self.action_down.triggered.connect(self.slot_action_down)
+        self.action_up.setVisible(False)
+        self.action_down.setVisible(False)
 
         # stack 1
         self.snapshotTableModel = SnapshotTableModel()
@@ -60,6 +68,8 @@ class hdb_main_win(QMainWindow, Ui_HdbMainWin):
             self.sigproxylist.append(proxy)
 
     def slot_actionmulwins(self):
+        self.action_up.setVisible(True)
+        self.action_down.setVisible(True)
         self.mutiwidgets = True
         self.gridLayout_2.itemAtPosition(0, 0).widget().rightwin.hide()
         self.gridLayout_2.itemAtPosition(0, 1).widget().rightwin.hide()
@@ -74,10 +84,33 @@ class hdb_main_win(QMainWindow, Ui_HdbMainWin):
         logger.debug("slot_actionmulwins")
         self.stackedWidget.setCurrentIndex(1)
 
-        symbollist = self.snapshotTableModel.manager_list[0]
-        symbollist = symbollist['symbol'].tolist()
-        for ind, symbol in enumerate(symbollist):
+        # symbollist = self.snapshotTableModel.manager_list[0]
+        # symbollist = symbollist['symbol'].tolist()
+        for ind in range(4):
+            intrplot: IntraDayPlotWidget = self.gridLayout_2.itemAtPosition(*self.widgetpos[ind]).widget()
+            intrplot.leftwin.symbol_label.setText("")
+            intrplot.plotbar(x=[], height=[])
+            intrplot.price_line.setData(x=[], y=[])
+        for ind, symbol in enumerate(self.symbollist[self.symbollist_showind:self.symbollist_showind+4]):
+            if ind>=4:
+                return
             self.refresh_line_bar(ind,symbol,resetxrange=True)
+            intrplot: IntraDayPlotWidget = self.gridLayout_2.itemAtPosition(*self.widgetpos[ind]).widget()
+            intrplot.leftwin.symbol_label.setText(symbol)
+
+    def slot_action_up(self):
+        if 0 == self.symbollist_showind:
+            return
+        self.symbollist_showind -= 4
+        self.slot_actionmulwins()
+        pass
+
+    def slot_action_down(self):
+        if len(self.symbollist) - self.symbollist_showind <=4:
+            return
+        self.symbollist_showind += 4
+        self.slot_actionmulwins()
+        pass
 
     def refresh_askbid_order_table(self,symbol,ind=0):
         intrplot: IntraDayPlotWidget = self.gridLayout_2.itemAtPosition(*self.widgetpos[ind]).widget()
@@ -112,17 +145,19 @@ class hdb_main_win(QMainWindow, Ui_HdbMainWin):
         # 获取 trade快照数据
         if symbol[:2] == 'SH':
             data_order: pd.DataFrame = self.snapshotTableModel.manager_dic_SHSetpTrade[symbol]
+            data_order = data_order[['trade_time', 'trade_price', 'trade_qty', 'bs_flag']]
+            # data_order = data_order[
+            #     (data_order['trade_time'] >= 93000000) & (data_order['trade_time'] <= data['time'].values[-1])]
+            data_order.loc[:, 'trade_price'] = data_order['trade_price'].apply(lambda x: x / 10000)
+            data_order.loc[:, 'trade_time'] = data_order['trade_time'].apply(lambda x: int(x / 1000))
+            data_order.loc[:, 'bs_flag'] = data_order['bs_flag'].map({66: 'B', 83: 'S'})
+            # data_order = data_order.reset_index(drop=True)
         elif symbol[:2] == 'SZ':
             data_order: pd.DataFrame = self.snapshotTableModel.manager_dic_SZSetpTrade[symbol]
+            data_order = data_order[['transact_time', 'last_px', 'last_qty', 'exec_type']]
         else:
             return
-        data_order = data_order[['trade_time', 'trade_price', 'trade_qty', 'bs_flag']]
-        # data_order = data_order[
-        #     (data_order['trade_time'] >= 93000000) & (data_order['trade_time'] <= data['time'].values[-1])]
-        data_order.loc[:, 'trade_price'] = data_order['trade_price'].apply(lambda x: x / 10000)
-        data_order.loc[:, 'trade_time'] = data_order['trade_time'].apply(lambda x: int(x / 1000))
-        data_order.loc[:, 'bs_flag'] = data_order['bs_flag'].map({66:'B',83:'S'})
-        # data_order = data_order.reset_index(drop=True)
+
         intrplot.set_order_data(data_order)
         pass
 
@@ -184,17 +219,18 @@ class hdb_main_win(QMainWindow, Ui_HdbMainWin):
         #获取 trade快照数据
         if symbol[:2] == 'SH':
             data_order: pd.DataFrame = self.snapshotTableModel.manager_dic_SHSetpTrade[symbol]
+            data_order = data_order[['trade_time', 'trade_price', 'trade_qty', 'bs_flag']]
+            # data_order = data_order[(data_order['trade_time']>=93000000) & (data_order['trade_time']<=data['time'][ind])]
+            # data_order.loc[:, 'trade_price'] = data_order['trade_price'].apply(lambda x:x/10000)
+            # data_order.loc[:, 'trade_time'] = data_order['trade_time'].apply(lambda x: int(x / 1000))
+            # data_order.loc[:, 'bs_flag'] = data_order['bs_flag'].map({66: 'B', 83: 'S'})
+            # data_order = data_order.reset_index(drop=True)
         elif symbol[:2] == 'SZ':
             data_order: pd.DataFrame = self.snapshotTableModel.manager_dic_SZSetpTrade[symbol]
+            data_order = data_order[['transact_time', 'last_px', 'last_qty', 'exec_type']]
         else:
             return
 
-        data_order = data_order[['trade_time','trade_price','trade_qty','bs_flag']]
-        # data_order = data_order[(data_order['trade_time']>=93000000) & (data_order['trade_time']<=data['time'][ind])]
-        # data_order.loc[:, 'trade_price'] = data_order['trade_price'].apply(lambda x:x/10000)
-        # data_order.loc[:, 'trade_time'] = data_order['trade_time'].apply(lambda x: int(x / 1000))
-        # data_order.loc[:, 'bs_flag'] = data_order['bs_flag'].map({66: 'B', 83: 'S'})
-        # data_order = data_order.reset_index(drop=True)
         intradayplot.set_order_data(data_order)
 
     def eventFilter(self, objwatched, event):
@@ -210,7 +246,6 @@ class hdb_main_win(QMainWindow, Ui_HdbMainWin):
                     self.pop_menu.addAction(self.action_header_config)
                     self.pop_menu.popup(QCursor.pos())
                 pass
-
         return super().eventFilter(objwatched, event)
 
     def page1_tableview_doubleclicked(self,modelIndex:QModelIndex):
@@ -237,24 +272,42 @@ class hdb_main_win(QMainWindow, Ui_HdbMainWin):
     def page2_UIdata_refresh(self,resetxrange=False):
         if self.stackedWidget.currentIndex() != 1:
             return
-        for ind in range(4):
-            intrplot: IntraDayPlotWidget = self.gridLayout_2.itemAtPosition(*self.widgetpos[ind]).widget()
-            symbol = intrplot.rightwin.symbol_label.text()
-            if 0 == ind and not self.mutiwidgets:
-                logger.debug("refresh_askbid_order_table ...")
-                self.refresh_askbid_order_table(symbol)
+        # for ind in range(4):
+        #     intrplot: IntraDayPlotWidget = self.gridLayout_2.itemAtPosition(*self.widgetpos[ind]).widget()
+        #     symbol = intrplot.rightwin.symbol_label.text()
+        #     if 0 == ind and not self.mutiwidgets:
+        #         logger.debug("refresh_askbid_order_table ...")
+        #         self.refresh_askbid_order_table(symbol)
+        #     self.refresh_line_bar(ind,symbol,resetxrange=resetxrange)
+        for ind, symbol in enumerate(self.symbollist[self.symbollist_showind:self.symbollist_showind+4]):
             self.refresh_line_bar(ind,symbol,resetxrange=resetxrange)
+            if 0 == ind and not self.mutiwidgets:
+                self.refresh_askbid_order_table(symbol)
+            # intrplot: IntraDayPlotWidget = self.gridLayout_2.itemAtPosition(*self.widgetpos[ind]).widget()
+            # intrplot.leftwin.symbol_label.setText(symbol)
         pass
 
     def back(self):
         totalpages = self.stackedWidget.count()
         curIndex = self.stackedWidget.currentIndex()
+        if (curIndex - 1) % totalpages == 0:
+            self.action_up.setVisible(False)
+            self.action_down.setVisible(False)
+        if (curIndex - 1) % totalpages == 1:
+            self.action_up.setVisible(True)
+            self.action_down.setVisible(True)
         self.stackedWidget.setCurrentIndex((curIndex + 1) % totalpages)
         self.show_page2()
 
     def forward(self):
         totalpages = self.stackedWidget.count()
         curIndex = self.stackedWidget.currentIndex()
+        if (curIndex - 1) % totalpages == 0:
+            self.action_up.setVisible(False)
+            self.action_down.setVisible(False)
+        if (curIndex - 1) % totalpages == 1:
+            self.action_up.setVisible(True)
+            self.action_down.setVisible(True)
         self.stackedWidget.setCurrentIndex((curIndex - 1) % totalpages)
         self.show_page2()
 
@@ -288,5 +341,4 @@ class hdb_main_win(QMainWindow, Ui_HdbMainWin):
         initmap = config_ini_key_value(keys=[], config_file=configfile_path)
         self.headerConfigWin = HeaderConfigSnapshotTable(headerNames=initmap['header_show'].split(","), headerNames_hide=initmap['header_hide'].split(","))
         self.headerConfigWin.show()
-
 

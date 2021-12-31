@@ -28,6 +28,8 @@ if __name__ == '__main__':
         # app.setFont(QFont('Microsoft YaHer UI', fontSize))
         win = hdb_main_win()
         win.show()
+        win.resize(1920,1080)
+        win.move(200,50)
         app.exec()
     except Exception as e:
         logger.exception(e)

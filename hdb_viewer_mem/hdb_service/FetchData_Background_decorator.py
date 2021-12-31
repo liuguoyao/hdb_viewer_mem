@@ -237,17 +237,15 @@ def snapCachRefresh( **kargs):
             header = None
             while True:
                 try:
-                    ret, cnt = g_remoteLink.get_data_items(1)
+                    ret, cnt = g_remoteLink.get_data_items(1000)
                     # time.sleep(0.1) #debug
                     # logger.debug("snapCachRefresh get cnt:" + str(cnt))
                     if 0 == cnt:
                         logger.debug("snapCachRefresh sleep")
                         time.sleep(1)  # wait 1 s
                     for ind, item in enumerate(ret):
-                        # logger.debug("Type_id:%s",item.type_id)
                         if item.type_id == 0: # HMDTickType_SecurityTick 0 沪深股债基快照数据
-                            if ind == 0 :
-                                header = list(item.total_list_value_names)
+                            header = list(item.total_list_value_names)
                             v = item.total_list_value
                             # 'recvq' in kargs.keys() and kargs['recvq'].put(int(100*ind/len(ret)))# 发送进度信息
                             symbol = v[0]
@@ -258,8 +256,8 @@ def snapCachRefresh( **kargs):
                                 tmp = pd.DataFrame([item.total_list_value],columns=header,index=[symbol])
                                 dic_snap[symbol] = dic_snap[symbol].append(tmp,ignore_index=True)
                         if item.type_id == 4:  # HMDTickType_SHStepTrade 4 上海逐笔成交数据
-                            if ind == 0:
-                                header = list(item.total_list_value_names)
+                            # if ind == 0:
+                            header = list(item.total_list_value_names)
                             v = item.total_list_value
                             symbol = v[0]
                             with lock:
@@ -268,8 +266,8 @@ def snapCachRefresh( **kargs):
                                 tmp = pd.DataFrame([item.total_list_value], columns=header, index=[symbol])
                                 dic_SHSetpTrade[symbol] = dic_SHSetpTrade[symbol].append(tmp, ignore_index=True)
                         if item.type_id == 5:  # HMDTickType_SZStepTrade 5 深圳逐笔成交数据
-                            if ind == 0:
-                                header = list(item.total_list_value_names)
+                            # if ind == 0:
+                            header = list(item.total_list_value_names)
                             v = item.total_list_value
                             symbol = v[0]
                             with lock:
