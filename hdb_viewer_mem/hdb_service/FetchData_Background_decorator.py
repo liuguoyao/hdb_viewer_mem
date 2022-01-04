@@ -214,11 +214,10 @@ def snapCachRefresh( **kargs):
         tickname = "tick_20230807"  # test
         symbols = initmap['symbols'].split(',')
 
-
-
         #先读取本地数据
 
         #再从服务器 读取剩余部分
+        curtime_4w = time.time()
         while True:
             g_hdbclient = HdbClient(initmap['his_svr_addr'], initmap['his_srv_port'],
                                     initmap['his_user'], initmap['his_pwd'],
@@ -235,46 +234,91 @@ def snapCachRefresh( **kargs):
             logger.debug("open_read_task:%s",curtime)
 
             header = None
+
+            dic_snap_tmp = {}
+            dic_SHSetpTrade_tmp = {}
+            dic_SZSetpTrade_tmp = {}
+            header_sectick = None
+            header_SZStepTrade = None
+            header_SHStepTrade = None
+
             while True:
                 try:
                     ret, cnt = g_remoteLink.get_data_items(1000)
-                    # time.sleep(0.1) #debug
-                    # logger.debug("snapCachRefresh get cnt:" + str(cnt))
                     if 0 == cnt:
                         logger.debug("snapCachRefresh sleep")
                         time.sleep(1)  # wait 1 s
                     for ind, item in enumerate(ret):
                         if item.type_id == 0: # HMDTickType_SecurityTick 0 沪深股债基快照数据
-                            header = list(item.total_list_value_names)
+                            header_sectick = item.total_list_value_names
                             v = item.total_list_value
                             # 'recvq' in kargs.keys() and kargs['recvq'].put(int(100*ind/len(ret)))# 发送进度信息
                             symbol = v[0]
                             curtime = v[6]
                             with lock:
-                                if symbol not in dic_snap.keys():
-                                    dic_snap[symbol] = pd.DataFrame(columns = header)
-                                tmp = pd.DataFrame([item.total_list_value],columns=header,index=[symbol])
-                                dic_snap[symbol] = dic_snap[symbol].append(tmp,ignore_index=True)
+                                if symbol not in dic_snap_tmp.keys():
+                                    dic_snap_tmp[symbol] = pd.DataFrame(columns = item.total_list_value_names)
+                                dic_snap_tmp[symbol] = dic_snap_tmp[symbol].append(
+                                    pd.Series(item.total_list_value,index=item.total_list_value_names),
+                                    ignore_index=True)
+                            # if symbol not in dic_snap_tmp.keys():
+                            #     dic_snap_tmp[symbol] = []
+                            # dic_snap_tmp[symbol].append(item.total_list_value)
                         if item.type_id == 4:  # HMDTickType_SHStepTrade 4 上海逐笔成交数据
-                            # if ind == 0:
-                            header = list(item.total_list_value_names)
+                            header_SHStepTrade = item.total_list_value_names
                             v = item.total_list_value
                             symbol = v[0]
                             with lock:
-                                if symbol not in dic_SHSetpTrade.keys():
-                                    dic_SHSetpTrade[symbol] = pd.DataFrame(columns=header)
-                                tmp = pd.DataFrame([item.total_list_value], columns=header, index=[symbol])
-                                dic_SHSetpTrade[symbol] = dic_SHSetpTrade[symbol].append(tmp, ignore_index=True)
+                                if symbol not in dic_SHSetpTrade_tmp.keys():
+                                    dic_SHSetpTrade_tmp[symbol] = pd.DataFrame(columns=item.total_list_value_names)
+                                dic_SHSetpTrade_tmp[symbol] = dic_SHSetpTrade_tmp[symbol].append(
+                                    pd.Series(item.total_list_value, index=item.total_list_value_names),
+                                    ignore_index=True)
+                            # if symbol not in dic_SHSetpTrade_tmp.keys():
+                            #     dic_SHSetpTrade_tmp[symbol] = []
+                            # dic_SHSetpTrade_tmp[symbol].append(item.total_list_value)
                         if item.type_id == 5:  # HMDTickType_SZStepTrade 5 深圳逐笔成交数据
-                            # if ind == 0:
-                            header = list(item.total_list_value_names)
+                            header_SZStepTrade = item.total_list_value_names
                             v = item.total_list_value
                             symbol = v[0]
                             with lock:
+                                if symbol not in dic_SZSetpTrade_tmp.keys():
+                                    dic_SZSetpTrade_tmp[symbol] = pd.DataFrame(columns=item.total_list_value_names)
+                                dic_SZSetpTrade_tmp[symbol] = dic_SZSetpTrade_tmp[symbol].append(
+                                    pd.Series(item.total_list_value, index=item.total_list_value_names),
+                                    ignore_index=True)
+                            # if symbol not in dic_SZSetpTrade_tmp.keys():
+                            #     dic_SZSetpTrade_tmp[symbol] = []
+                            # dic_SZSetpTrade_tmp[symbol].append(item.total_list_value)
+                    if time.time() - curtime_4w> 1 :
+                        logger.debug("writeMem ... ")
+                        with lock:
+                            for symbol in dic_snap_tmp.keys():
+                                if symbol not in dic_snap.keys():
+                                    dic_snap[symbol] = pd.DataFrame(columns=dic_snap_tmp[symbol].columns)
+                                dic_snap[symbol] = dic_snap[symbol].append(dic_snap_tmp[symbol],ignore_index=True)
+                            for symbol in dic_SHSetpTrade_tmp.keys():
+                                if symbol not in dic_SHSetpTrade.keys():
+                                    dic_SHSetpTrade[symbol] = pd.DataFrame(columns=dic_SHSetpTrade_tmp[symbol].columns)
+                                dic_SHSetpTrade[symbol] = dic_SHSetpTrade[symbol].append(dic_SHSetpTrade_tmp[symbol],ignore_index=True)
+                            for symbol in dic_SZSetpTrade_tmp.keys():
                                 if symbol not in dic_SZSetpTrade.keys():
-                                    dic_SZSetpTrade[symbol] = pd.DataFrame(columns=header)
-                                tmp = pd.DataFrame([item.total_list_value], columns=header, index=[symbol])
-                                dic_SZSetpTrade[symbol] = dic_SZSetpTrade[symbol].append(tmp, ignore_index=True)
+                                    dic_SZSetpTrade[symbol] = pd.DataFrame(columns=dic_SZSetpTrade_tmp[symbol].columns)
+                                dic_SZSetpTrade[symbol] = dic_SZSetpTrade[symbol].append(dic_SZSetpTrade_tmp[symbol],ignore_index=True)
+                            dic_snap_tmp = {}
+                            dic_SHSetpTrade_tmp = {}
+                            dic_SZSetpTrade_tmp = {}
+
+                        # for symbol in dic_snap_tmp.keys():
+                        #     dic_snap[symbol] = pd.DataFrame(dic_snap_tmp[symbol],columns=header_sectick)
+                        # for symbol in dic_SHSetpTrade_tmp.keys():
+                        #     dic_SHSetpTrade[symbol] = pd.DataFrame(dic_SHSetpTrade_tmp[symbol], columns=header_SHStepTrade)
+                        # for symbol in dic_SZSetpTrade_tmp.keys():
+                        #     dic_SZSetpTrade[symbol] = pd.DataFrame(dic_SZSetpTrade_tmp[symbol], columns=header_SZStepTrade)
+
+
+                        curtime_4w = time.time()
+
                 except Exception as e:
                     logger.exception("In While Exception:")
                     logger.exception(e)
@@ -304,14 +348,15 @@ def refreshUIData(**kargs):
             return []
 
         for symbol in dic_snap.keys():
-            v = dic_snap[symbol].iloc[-1]
-            tmpdf = pd.DataFrame([v], index=[symbol])
-            if symbol not in data[0].index.values:
-                data[0] = data[0].append(tmpdf)
-            else:
-                # data[0].loc[symbol] = v #pd.Series(v)
-                pdData.update(tmpdf)
-                data[0] = pdData
+            if len(dic_snap[symbol])>0:
+                v = dic_snap[symbol].iloc[-1]
+                tmpdf = pd.DataFrame([v], index=[symbol])
+                if symbol not in data[0].index.values:
+                    data[0] = data[0].append(tmpdf)
+                else:
+                    # data[0].loc[symbol] = v #pd.Series(v)
+                    pdData.update(tmpdf)
+                    data[0] = pdData
 
     except Exception as e:
         logger.exception("refreshUIData Exception:")
