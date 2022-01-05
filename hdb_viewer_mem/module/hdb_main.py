@@ -199,7 +199,8 @@ class hdb_main_win(QMainWindow, Ui_HdbMainWin):
     # def mousemove_refresh_askbid_order_table_slot(self,intradayplot:IntraDayPlotWidget,ind):
     def mousemove_refresh_askbid_order_table_slot(self,*args):
         intradayplot, ind = args[0][0]
-        # return
+        if self.mutiwidgets:
+            return
         symbol = intradayplot.rightwin.symbol_label.text()
         if symbol not in self.snapshotTableModel.manager_dic_SecurityTick.keys():
             return

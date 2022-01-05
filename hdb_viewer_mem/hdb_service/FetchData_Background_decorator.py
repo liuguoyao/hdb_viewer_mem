@@ -309,12 +309,12 @@ def snapCachRefresh( **kargs):
                             dic_SHSetpTrade_tmp = {}
                             dic_SZSetpTrade_tmp = {}
 
-                        # for symbol in dic_snap_tmp.keys():
-                        #     dic_snap[symbol] = pd.DataFrame(dic_snap_tmp[symbol],columns=header_sectick)
-                        # for symbol in dic_SHSetpTrade_tmp.keys():
-                        #     dic_SHSetpTrade[symbol] = pd.DataFrame(dic_SHSetpTrade_tmp[symbol], columns=header_SHStepTrade)
-                        # for symbol in dic_SZSetpTrade_tmp.keys():
-                        #     dic_SZSetpTrade[symbol] = pd.DataFrame(dic_SZSetpTrade_tmp[symbol], columns=header_SZStepTrade)
+                            # for symbol in dic_snap_tmp.keys():
+                            #     dic_snap[symbol] = pd.DataFrame(dic_snap_tmp[symbol],columns=header_sectick)
+                            # for symbol in dic_SHSetpTrade_tmp.keys():
+                            #     dic_SHSetpTrade[symbol] = pd.DataFrame(dic_SHSetpTrade_tmp[symbol], columns=header_SHStepTrade)
+                            # for symbol in dic_SZSetpTrade_tmp.keys():
+                            #     dic_SZSetpTrade[symbol] = pd.DataFrame(dic_SZSetpTrade_tmp[symbol], columns=header_SZStepTrade)
 
 
                         curtime_4w = time.time()

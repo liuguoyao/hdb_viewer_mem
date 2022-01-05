@@ -12,6 +12,7 @@ logger.setLevel(logging.DEBUG)
 win = None
 
 from hdb_viewer_mem.module.hdb_main import *
+from multiprocessing import freeze_support
 
 
 def exception_hook(exctype, value, traceback):
@@ -21,6 +22,7 @@ def exception_hook(exctype, value, traceback):
     # win.append_log(text)
 
 if __name__ == '__main__':
+    freeze_support()
     sys.excepthook = exception_hook
     try:
         # QtCore.QCoreApplication.setAttribute(Qt.AA_EnableHighDpiScaling)
@@ -28,8 +30,9 @@ if __name__ == '__main__':
         # app.setFont(QFont('Microsoft YaHer UI', fontSize))
         win = hdb_main_win()
         win.show()
-        win.resize(1920,1080)
+        win.resize(1200,800)
         win.move(200,50)
+        win.showMaximized()
         app.exec()
     except Exception as e:
         logger.exception(e)

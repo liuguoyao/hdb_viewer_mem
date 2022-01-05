@@ -6,10 +6,10 @@ from PyQt5.QtGui import *
 import random
 from hdb_viewer_mem.hdb_service.FetchData_Background_decorator import *
 from hdb_viewer_mem.util.logger import *
+# from multiprocessing import Manager
 
 logger = get_logger(__name__)
 logger.setLevel(logging.DEBUG)
-
 
 #行情快照 model部分,
 # 处理数据功能:定时读取数据
