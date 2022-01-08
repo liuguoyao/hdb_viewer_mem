@@ -32,9 +32,7 @@ class SnapshotTableModel(QAbstractTableModel):
         self.fetchData = None
         self.reading = False
 
-        #
-        self.timer = QTimer(timeout=self.refreshUIData, interval=3000) # ms
-        self.timer.start()
+        self.timer = QTimer(timeout=self.refreshUIData, interval=1000) # ms
 
         self.refreshData()
 
@@ -111,22 +109,31 @@ class SnapshotTableModel(QAbstractTableModel):
         if self.fetchData is None or not self.reading:
             self.reading = True
             logger.debug("fetchData is None or not reading")
-            # self.fetchData = FetchData_Background_decorator(load2)
-            self.fetchData = FetchData_Background_decorator(snapCachRefresh,
-                                                            dic_security=self.manager_dic_SecurityTick,
-                                                            dic_SHSetpTrade = self.manager_dic_SHSetpTrade,
-                                                            dic_SZSetpTrade = self.manager_dic_SZSetpTrade)
-            self.fetchData.sigDataReturn.connect(self.set_custom_data_slot)
+            # self.fetchData = FetchData_Background_decorator(snapCachRefresh,
+            #                                                 dic_security=self.manager_dic_SecurityTick,
+            #                                                 dic_SHSetpTrade = self.manager_dic_SHSetpTrade,
+            #                                                 dic_SZSetpTrade = self.manager_dic_SZSetpTrade)
+
+            self.fetchData = FetchData_Background_decorator(snapCachRefresh_shareFile)
+
+
             # self.fetchData.sigProgressRate.connect(lambda v: print('PprogressRate emit rev:', v))
             # self.fetchData.sigProgressRate.connect(lambda v: print('sigProgressRate emit rev:', v))
         else:
             logger.debug("is reading ...")
 
-    def refreshUIData(self):
-        logger.debug("refreshUIData")
+        self.timer.start()
 
-        self.refreshUI = FetchData_Background_decorator(refreshUIData, dic_security=self.manager_dic_SecurityTick, lis=self.manager_list)
-        self.refreshUI.sigDataReturn.connect(self.refreshUI_slot)
+    def refreshUIData(self):
+        logger.debug("snap shot refreshUIData ...")
+
+        # self.refreshUI = FetchData_Background_decorator(refreshUIData, dic_security=self.manager_dic_SecurityTick, lis=self.manager_list)
+        # self.refreshUI.sigDataReturn.connect(self.refreshUI_slot)
+        try:
+            self.refreshUI = FetchData_Background_decorator(refreshUIData_shareFile, lis=self.manager_list)
+            self.refreshUI.sigDataReturn.connect(self.refreshUI_slot_shareFile)
+        except Exception as e:
+            logger.debug(e)
         pass
 
     def refreshUI_slot(self, result_list):
@@ -148,15 +155,24 @@ class SnapshotTableModel(QAbstractTableModel):
         self.sigdatafresh.emit()
         pass
 
+    def refreshUI_slot_shareFile(self, result_list):
+        ml = self.manager_list[0]
+        # ml = result_list[0]
+        if ml is None or len(ml)==0:
+            return
+        # filter clumns
+        initmap = config_ini_key_value(keys=[], config_file=r"./config/system_config.ini")
+        self._data = ml[initmap["header_show"].split(',')]
 
-    def set_custom_data_slot(self,result_list):
-        logger.debug("slot:" + str(len(result_list)))
-        self.refreshData()
-        # if len(result_list)>1:
-        #     self.setheader(result_list[0])
-        #     self.setCustomData(result_list[1:])
-        #     self.layoutChanged.emit()
-        # self.reading = False
+        self._background_color = []
+        self._foreground_color = []
+        rows, cls = self._data.shape[0],self._data.shape[1]
+        for rowidx in range(rows):
+            self._background_color.append([QBrush(QColor(255, 255, 255)) for i in range(cls)])
+            self._foreground_color.append([QBrush(QColor(0, 100, 200)) for i in range(cls)])
+
+        self.layoutChanged.emit()
+        # self.sigdatafresh.emit()
 
     def __del__(self):
         logger.debug("snapshot tablemode del")

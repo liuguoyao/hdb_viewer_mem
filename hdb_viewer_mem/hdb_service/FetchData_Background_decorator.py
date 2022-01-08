@@ -13,6 +13,7 @@ import traceback
 import sys
 import threading
 import pandas as pd
+import pickle
 
 # from hdb_viewer_mem.hdb_link.hdb_link_item import *
 from hdb_viewer_mem.hdb_link.hdb_remote_link_item import  *
@@ -30,7 +31,8 @@ logger.setLevel(logging.DEBUG)
 
 DEBUG = False
 
-max_workers = 2
+max_workers = 4
+threadCount = 2
 
 
 g_lock = None
@@ -99,8 +101,9 @@ class Task(QRunnable):
         global g_executor
         global g_lock
         global g_queues
-        if g_queues is None:
-            time.sleep(3)
+        while g_queues is None:
+            time.sleep(0.5)
+            continue
         if g_queues is None or g_executor is None:
             return
         threadname = threading.currentThread().name
@@ -108,7 +111,7 @@ class Task(QRunnable):
         # logger.debug(threadname + ' in ' + str(g_threadids))
         queue_index = g_threadids.index(threadname)
         if queue_index >= len(g_queues):
-            # print("queue_index >= len(g_queues)")
+            print("queue_index >= len(g_queues)")
             return
         self.kargs['lock'] = g_lock
         self.kargs['recvq'] = g_queues[queue_index]
@@ -156,6 +159,7 @@ class FetchData_Background_decorator(QObject):
         super(FetchData_Background_decorator, self).__init__()
         self.initContext()
         if fn is not None:
+            time.sleep(0.01)
             FetchData_Background_decorator.thread_pool.start(Task(self.sigProgressRate, self.sigDataReturn, fn, *args, **kargs))
 
     @classmethod
@@ -163,7 +167,7 @@ class FetchData_Background_decorator(QObject):
         if cls.thread_pool is None:
             cls.thread_pool = QThreadPool().globalInstance()
             cls.thread_pool.setExpiryTimeout(-1)
-            cls.thread_pool.setMaxThreadCount(max_workers)
+            cls.thread_pool.setMaxThreadCount(threadCount)
             # print(cls.thread_pool.maxThreadCount())
             logger.debug("thread_pool.maxThreadCount:"+str(cls.thread_pool.maxThreadCount()))
             cls.thread_pool.start(CreateExecutor())
@@ -210,8 +214,13 @@ def snapCachRefresh( **kargs):
         today = int(time.strftime("%Y%m%d"))
         curtime = 93000000
         tickname = "tick_" + time.strftime("%Y%m%d")
+        file_path = "memory/marketdata/"+tickname
+
         today = 20200113  # test
         tickname = "tick_20230807"  # test
+        file_path = "memory/marketdata/tick_20230807"  #test
+
+        logger.debug("%s %s",today,tickname)
         symbols = initmap['symbols'].split(',')
 
         #先读取本地数据
@@ -221,7 +230,7 @@ def snapCachRefresh( **kargs):
         while True:
             g_hdbclient = HdbClient(initmap['his_svr_addr'], initmap['his_srv_port'],
                                     initmap['his_user'], initmap['his_pwd'],
-                                    initmap["file_path"])
+                                    file_path)
             ret = g_hdbclient.open_client()
             if ret <= 0:
                 logger.exception("open_client ERR:")
@@ -245,10 +254,15 @@ def snapCachRefresh( **kargs):
             while True:
                 try:
                     ret, cnt = g_remoteLink.get_data_items(1000)
+                    # b = np.memmap('test.mymemmap',
+                    #               dtype=np.dtype({'names': ['id', 'sin', 'cos'], 'formats': ['h', 'd', 'd']},
+                    #                              align=False), mode='r+', shape=(1,), offset=4)
                     if 0 == cnt:
                         logger.debug("snapCachRefresh sleep")
                         time.sleep(1)  # wait 1 s
-                    for ind, item in enumerate(ret):
+                    # for ind, item in enumerate(ret):
+                    for ind in range(cnt):
+                        item = ret[ind]
                         if item.type_id == 0: # HMDTickType_SecurityTick 0 沪深股债基快照数据
                             header_sectick = item.total_list_value_names
                             v = item.total_list_value
@@ -333,6 +347,152 @@ def snapCachRefresh( **kargs):
         logger.exception(e)
     return []
 
+def snapCachRefresh_shareFile( **kargs):
+    # logger.debug("call snapCachRefresh_shareFile .. ")
+    try:
+        global g_config_path
+        # config_path = r"./config/system_config.ini"
+        initmap = config_ini_key_value(keys=[],config_file=g_config_path)
+        curdate = time.strftime("%Y%m%d")
+        curtime = 93000000
+        tickname = "tick_" + time.strftime("%Y%m%d")
+        file_path = "memory/marketdata/" + tickname
+
+        today = 20200113  # test
+        tickname = "tick_20230807"  # test
+        file_path = "memory/marketdata/tick_20230807"  #test
+
+        symbols = initmap['symbols'].split(',')
+
+        #先读取本地数据
+
+        #再从服务器 读取剩余部分
+        curtime_4w = time.time()
+        while True:
+            #create sharefile if not exist:
+            # curdate = '20230807' #test
+            if not os.path.exists(curdate):
+                os.mkdir(curdate)
+            for symbol in symbols:
+                curpath = os.path.join(curdate,symbol+"_SecurityTick.data")
+                if not os.path.exists(curpath):
+                    open(curpath, mode='w+').close()
+                curpath = os.path.join(curdate, symbol + "_SZStepTrade.data")
+                if symbol[:2]=="SZ" and not os.path.exists(curpath):
+                    open(curpath, mode='w+').close()
+                curpath = os.path.join(curdate, symbol + "_SHStepTrade.data")
+                if symbol[:2]=="SH" and not os.path.exists(curpath):
+                    open(curpath,  mode='w+').close()
+
+
+            g_hdbclient = HdbClient(initmap['his_svr_addr'], initmap['his_srv_port'],
+                                    initmap['his_user'], initmap['his_pwd'],
+                                    file_path)
+            ret = g_hdbclient.open_client()
+            if ret <= 0:
+                logger.exception("open_client ERR:")
+
+            g_remoteLink = HdbRemoteLinkItem(g_hdbclient, "memory/marketdata", tickname)
+            g_remoteLink.open_link()
+
+            g_remoteLink.open_read_task(today,curtime,today,150000000,symbols, ["SecurityTick","SZStepTrade","SHStepTrade"])
+            logger.debug("open_read_task:%s",curtime)
+
+            while True:
+                try:
+                    ret, cnt = g_remoteLink.get_data_items(1000)
+                    if 0 == cnt:
+                        logger.debug("snapCachRefresh sleep")
+                        time.sleep(1)  # wait 1 s
+
+                    for ind in range(cnt):
+                        item = ret[ind]
+                        if item.type_id == 0: # HMDTickType_SecurityTick 0 沪深股债基快照数据
+                            # 'recvq' in kargs.keys() and kargs['recvq'].put(int(100*ind/len(ret)))# 发送进度信息
+                            v = item.total_list_value
+                            symbol,curtime = v[0],v[6]
+                            filename = os.path.join(curdate,symbol+"_SecurityTick.data")
+
+                            mm_header = np.memmap(filename, dtype=np.uint32, mode='r+', shape=(1,2), offset=0)
+                            curpos,dtypelen = mm_header[0][0], mm_header[0][1]
+                            if 0 == curpos:
+                                typesbytes = pickle.dumps(item.total_dtypes.descr)
+                                # p = pickle.loads(typesbytes)
+                                mm_header[0][1] = len(typesbytes)
+                                dtypelen = len(typesbytes)
+                                mm = np.memmap(filename, dtype=np.byte, mode='r+', shape=(len(typesbytes),), offset=8)
+                                for ind,v in enumerate(typesbytes):
+                                    mm[ind]= v
+
+                            mm = np.memmap(filename, dtype=item.total_dtypes, mode='r+', shape=(1,), offset=8+dtypelen+curpos*item.total_dtypes.itemsize)
+                            mm[0] = item.total_array_data[0]
+                            # mm.flush()
+
+                            mm_header[0][0] = curpos + 1
+                            # logger.debug("fp pos:%s  %s",curpos + 1,filename)
+
+                        if item.type_id == 4:  # HMDTickType_SHStepTrade 4 上海逐笔成交数据
+                            v = item.total_list_value
+                            symbol = v[0]
+                            filename = os.path.join(curdate, symbol + "_SHStepTrade.data")
+
+                            mm_header = np.memmap(filename, dtype=np.uint32, mode='r+', shape=(1, 2), offset=0)
+                            curpos, dtypelen = mm_header[0][0], mm_header[0][1]
+
+                            if 0 == curpos:
+                                typesbytes = pickle.dumps(item.total_dtypes.descr)
+                                # p = pickle.loads(typesbytes)
+                                mm_header[0][1] = len(typesbytes)
+                                dtypelen = len(typesbytes)
+                                mm = np.memmap(filename, dtype=np.byte, mode='r+', shape=(len(typesbytes),), offset=8)
+                                for ind, v in enumerate(typesbytes):
+                                    mm[ind] = v
+
+                            mm = np.memmap(filename, dtype=item.total_dtypes, mode='r+', shape=(1,),
+                                           offset=8 +dtypelen + curpos * item.total_dtypes.itemsize)
+                            mm[0] = item.total_array_data[0]
+                            # mm.flush()
+
+                            mm_header[0][0] = curpos + 1
+
+                        if item.type_id == 5:  # HMDTickType_SZStepTrade 5 深圳逐笔成交数据
+                            v = item.total_list_value
+                            symbol = v[0]
+                            filename = os.path.join(curdate, symbol + "_SZStepTrade.data")
+
+                            mm_header = np.memmap(filename, dtype=np.uint32, mode='r+', shape=(1, 2), offset=0)
+                            curpos, dtypelen = mm_header[0][0], mm_header[0][1]
+
+                            if 0 == curpos:
+                                typesbytes = pickle.dumps(item.total_dtypes.descr)
+                                # p = pickle.loads(typesbytes)
+                                mm_header[0][1] = len(typesbytes)
+                                dtypelen = len(typesbytes)
+                                mm = np.memmap(filename, dtype=np.byte, mode='r+', shape=(len(typesbytes),), offset=8)
+                                for ind, v in enumerate(typesbytes):
+                                    mm[ind] = v
+
+                            mm = np.memmap(filename, dtype=item.total_dtypes, mode='r+', shape=(1,),
+                                           offset=8 +dtypelen + curpos * item.total_dtypes.itemsize)
+                            mm[0] = item.total_array_data[0]
+                            # mm.flush()
+
+                            mm_header[0][0] = curpos + 1
+
+                except Exception as e:
+                    logger.exception("In While Exception:")
+                    logger.exception(e)
+                    time.sleep(2)
+                    g_remoteLink.close_read_task()
+                    # g_remoteLink.close_link()
+                    g_hdbclient.close_client()
+                    break
+            # g_remoteLink.close_read_task()
+    except Exception as e:
+        logger.exception("snapCachRefresh Exception:")
+        logger.exception(e)
+    return []
+
 def refreshUIData(**kargs):
     logger.debug("page1 call refreshUIData .. ")
     try:
@@ -364,7 +524,88 @@ def refreshUIData(**kargs):
 
     return []
 
+# pdData = None
+def refreshUIData_shareFile(**kargs):
+    logger.debug("page1 call refreshUIData_shareFile .. ")
+    # global pdData
+    data = kargs['lis']
+    pdData = data[0]
+    try:
+        #读取文件
+        curdate = time.strftime("%Y%m%d")
+        global g_config_path
+        initmap = config_ini_key_value(keys=[],config_file=g_config_path)
+        symbols = initmap['symbols'].split(',')
 
+        symboll = []
+        if pdData is not None and len(pdData) > 0:
+            symboll = [str(v[:9], encoding="utf8") for v in pdData["symbol"].values]
+
+        for symbol in symbols:
+            filename = os.path.join(curdate, symbol + "_SecurityTick.data")
+            if not os.path.exists(filename):
+                continue
+
+            mm = np.memmap(filename, dtype=np.uint32, mode='r', shape=(1, 2), offset=0)
+            curpos, dtypelen = mm[0][0], mm[0][1]
+            curpos -= 1
+            if curpos>0:
+                mm = np.memmap(filename, dtype=np.byte, mode='r', shape=(dtypelen,), offset=8)
+                itemdtypes_descr = pickle.loads(mm)
+                itemdtypes = np.dtype(itemdtypes_descr)
+                mm = np.memmap(filename, dtype=itemdtypes, mode='r', shape=(1,1),
+                               offset=8 + dtypelen + curpos * itemdtypes.itemsize)
+                # while 0 == mm[0][0][0][0]:  #wait memdata write to file
+                #     time.sleep(0.01)
+                #     continue
+                itemdf = pd.DataFrame([pd.Series(list(mm[0][0]), index=itemdtypes.names)], index=[symbol])
+
+                # if pdData is None:
+                #     pdData = pd.DataFrame(columns=itemdtypes.names)
+                if symbol not in symboll:
+                    pdData = pdData.append(itemdf)
+                else:
+                    pdData.update(itemdf)
+    except Exception as e:
+        logger.exception("refreshUIData Exception:")
+        logger.exception(e)
+
+    data[0] = pdData
+    return []
+    # return [pdData]
+
+def refresh_line_bar_shareFile(symbol, **kargs):
+    curdate = time.strftime("%Y%m%d")
+    filename = os.path.join(curdate, symbol + "_SecurityTick.data")
+    mm_header = np.memmap(filename, dtype=np.uint32, mode='r', shape=(1, 2), offset=0)
+    curpos, dtypelen = mm_header[0][0], mm_header[0][1]
+    mm_dtype = np.memmap(filename, dtype=np.byte, mode='r', shape=(dtypelen,), offset=8)
+    itemdtypes_descr = pickle.loads(mm_dtype)
+    itemdtypes = np.dtype(itemdtypes_descr)
+    mm_items = np.memmap(filename, dtype=itemdtypes, mode='r', shape=(curpos, ),offset=8 + dtypelen)
+    data = pd.DataFrame([list(v) for v in mm_items], columns=itemdtypes.names)
+
+    # data = data.reset_index(drop=True)
+    pre_close = data['pre_close'][0] / 10000
+    timelables = (data['time'].apply(lambda x: int(x / 1000))).tolist()
+
+    x = list(range(data.shape[0]))
+    y_volume = data['volume'] - data['volume'].shift(axis=0, fill_value=0)
+    y_price = (data['match'] / 10000).tolist()
+
+    #设置plot的x活动范围限制
+    today = time.strftime("%Y%m%d")
+    startstramp = time.mktime(time.strptime(today+" 093000","%Y%m%d %H%M%S"))
+    currenttime = " {:0>6d}".format(timelables[-1])
+    endstramp = time.mktime(time.strptime(today+currenttime,"%Y%m%d %H%M%S"))
+
+    timeinterval = endstramp - startstramp
+    timeinterval = timeinterval if timeinterval<=2*60*60 else timeinterval-1.5*60*60 #去除中午休市
+    xMax = int(4*60*60/timeinterval*len(timelables))
+
+    #should return
+    # pre_close timelables x  y_volume  y_price xMax
+    return [(pre_close, timelables, x,  y_volume,  y_price, xMax)]
 
 if __name__ == '__main__':
 
