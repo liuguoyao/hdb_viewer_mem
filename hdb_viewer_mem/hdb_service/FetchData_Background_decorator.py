@@ -25,6 +25,7 @@ from hdb_py.hdb_data_item import *
 
 from hdb_viewer_mem.util.utility import *
 from hdb_viewer_mem.util.logger import *
+from hdb_viewer_mem.hdb_service.sharefile_memmap import *
 
 logger = get_logger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -364,25 +365,73 @@ def snapCachRefresh_shareFile( **kargs):
 
         symbols = initmap['symbols'].split(',')
 
-        #先读取本地数据
+        # create sharefile if not exist:
+        if not os.path.exists(curdate):
+            os.mkdir(curdate)
+        for symbol in symbols:
+            curpath = os.path.join(curdate, symbol + "_SecurityTick.data")
+            if not os.path.exists(curpath):
+                open(curpath, mode='w+').close()
+            curpath = os.path.join(curdate, symbol + "_SZStepTrade.data")
+            if symbol[:2] == "SZ" and not os.path.exists(curpath):
+                open(curpath, mode='w+').close()
+            curpath = os.path.join(curdate, symbol + "_SHStepTrade.data")
+            if symbol[:2] == "SH" and not os.path.exists(curpath):
+                open(curpath, mode='w+').close()
 
         #再从服务器 读取剩余部分
         curtime_4w = time.time()
         while True:
-            #create sharefile if not exist:
-            # curdate = '20230807' #test
-            if not os.path.exists(curdate):
-                os.mkdir(curdate)
+            # 先读取本地数据 更新curtime offset
+            maxpos = [93000000, 0]
+            symbols_curpos = {}
             for symbol in symbols:
-                curpath = os.path.join(curdate,symbol+"_SecurityTick.data")
-                if not os.path.exists(curpath):
-                    open(curpath, mode='w+').close()
-                curpath = os.path.join(curdate, symbol + "_SZStepTrade.data")
-                if symbol[:2]=="SZ" and not os.path.exists(curpath):
-                    open(curpath, mode='w+').close()
-                curpath = os.path.join(curdate, symbol + "_SHStepTrade.data")
-                if symbol[:2]=="SH" and not os.path.exists(curpath):
-                    open(curpath,  mode='w+').close()
+                filename = os.path.join(curdate, symbol + "_SecurityTick.data")
+                if os.path.exists(filename) and os.path.getsize(filename) > 0:
+                    itemdf = read_item_last(filename,symbol)
+                    time_point_seq_no, itemtime = itemdf.time_point_seq_no.values[0], itemdf.time.values[0]
+                    symbols_curpos[filename] = [symbol, "SecurityTick", itemtime, time_point_seq_no]
+                    logger.debug("%s %s %s :", filename, time_point_seq_no, itemtime)  #
+                    if itemtime > maxpos[0]:
+                        maxpos[0] = itemtime
+                        maxpos[1] = time_point_seq_no
+                    elif time_point_seq_no > maxpos[1]:
+                        maxpos[1] = time_point_seq_no
+                else:
+                    symbols_curpos[filename] = [symbol, "SecurityTick", 93000000, 0]
+
+                if 'SH' == symbol[:2]:
+                    filename = os.path.join(curdate, symbol + "_SHStepTrade.data")
+                if 'SZ' == symbol[:2]:
+                    filename = os.path.join(curdate, symbol + "_SZStepTrade.data")
+                if os.path.exists(filename) and os.path.getsize(filename) > 0:
+                    itemdf = read_item_last(filename, symbol)
+                    if 'SH' == symbol[:2]:
+                        time_point_seq_no, itemtime = itemdf.time_point_seq_no.values[0], itemdf.trade_time.values[0]
+                        symbols_curpos[filename] = [symbol, "SHStepTrade", itemtime, time_point_seq_no]
+                    if 'SZ' == symbol[:2]:
+                        time_point_seq_no, itemtime = itemdf.time_point_seq_no.values[0], itemdf.transact_time.values[0]
+                        symbols_curpos[filename] = [symbol, "SZStepTrade", itemtime, time_point_seq_no]
+                    logger.debug("%s %s %s :", filename, time_point_seq_no, itemtime)  #
+                    if itemtime > maxpos[0]:
+                        maxpos[0] = itemtime
+                        maxpos[1] = time_point_seq_no
+                    elif time_point_seq_no > maxpos[1]:
+                        maxpos[1] = time_point_seq_no
+                else:
+                    if 'SH' == symbol[:2]:
+                        symbols_curpos[filename] = [symbol, "SHStepTrade", 93000000, 0]
+                    if 'SZ' == symbol[:2]:
+                        symbols_curpos[filename] = [symbol, "SZStepTrade", 93000000, 0]
+            logger.debug("max:%s %s", maxpos[0], maxpos[1])
+
+            # maxpos + 1s
+            if 93000000 < maxpos[0]:
+                ms = maxpos[0] % 1000
+                st = time.strptime(time.strftime("%Y%m%d") + " " + str(int(maxpos[0] / 1000)), "%Y%m%d %H%M%S")
+                t = time.mktime(st)
+                maxpos[0] = int(time.strftime("%H%M%S", time.localtime(t + 1)))
+                maxpos[0] = maxpos[0] * 1000  # +ms
 
 
             g_hdbclient = HdbClient(initmap['his_svr_addr'], initmap['his_srv_port'],
@@ -395,7 +444,49 @@ def snapCachRefresh_shareFile( **kargs):
             g_remoteLink = HdbRemoteLinkItem(g_hdbclient, "memory/marketdata", tickname)
             g_remoteLink.open_link()
 
-            g_remoteLink.open_read_task(today,curtime,today,150000000,symbols, ["SecurityTick","SZStepTrade","SHStepTrade"])
+            #load diff
+            if 93000000 < maxpos[0]:
+                for k in symbols_curpos.keys():
+                    symbol, datatype, itemtime, time_point_seq_no = symbols_curpos[k]
+
+                    g_remoteLink.open_read_task(today, itemtime, today, maxpos[0], [symbol], [datatype],
+                                                offset=time_point_seq_no)
+                    print(k,today, itemtime, today, maxpos[0], [datatype],time_point_seq_no)
+                    while True:
+                        ret, cnt = g_remoteLink.get_data_items(1)
+                        logger.debug("%s readdiff %s", k, cnt)
+                        if 0 == cnt:
+                            break
+                        for ind in range(cnt):
+                            item = ret[ind]
+                            if item.type_id == 0:  # HMDTickType_SecurityTick 0 沪深股债基快照数据
+                                filename = os.path.join(curdate, symbol + "_SecurityTick.data")
+                                df = pd.DataFrame([item.total_list_value],columns=list(item.total_list_value_names))
+                                dftime,df_sq = df.time[0],df.time_point_seq_no[0]
+                                if (itemtime==dftime and time_point_seq_no<df_sq) or (itemtime < dftime):
+                                    print("Write",filename,dftime,df_sq)
+                                    append_item(filename, item)
+                                print(filename,dftime, df_sq)
+                            if item.type_id == 4:  # HMDTickType_SHStepTrade 4 上海逐笔成交数据
+                                filename = os.path.join(curdate, symbol + "_SHStepTrade.data")
+                                df = pd.DataFrame([item.total_list_value], columns=list(item.total_list_value_names))
+                                dftime, df_sq = df.trade_time[0],df.time_point_seq_no[0]
+                                if (itemtime==dftime and time_point_seq_no<df_sq) or (itemtime < dftime):
+                                    print("Write",filename,dftime,df_sq)
+                                    append_item(filename, item)
+                                print(filename,dftime, df_sq)
+                            if item.type_id == 5:  # HMDTickType_SZStepTrade 5 深圳逐笔成交数据
+                                filename = os.path.join(curdate, symbol + "_SZStepTrade.data")
+                                df = pd.DataFrame([item.total_list_value], columns=list(item.total_list_value_names))
+                                dftime, df_sq = df.transact_time[0],df.time_point_seq_no[0]
+                                if (itemtime==dftime and time_point_seq_no<df_sq) or (itemtime < dftime):
+                                    print("Write",filename,dftime,df_sq)
+                                    append_item(filename, item)
+                                print(filename,dftime, df_sq)
+                    g_remoteLink.close_read_task()
+
+            #load all
+            g_remoteLink.open_read_task(today,maxpos[0],today,150000000,symbols, ["SecurityTick","SZStepTrade","SHStepTrade"])
             logger.debug("open_read_task:%s",curtime)
 
             while True:
@@ -412,72 +503,20 @@ def snapCachRefresh_shareFile( **kargs):
                             v = item.total_list_value
                             symbol,curtime = v[0],v[6]
                             filename = os.path.join(curdate,symbol+"_SecurityTick.data")
-
-                            mm_header = np.memmap(filename, dtype=np.uint32, mode='r+', shape=(1,2), offset=0)
-                            curpos,dtypelen = mm_header[0][0], mm_header[0][1]
-                            if 0 == curpos:
-                                typesbytes = pickle.dumps(item.total_dtypes.descr)
-                                # p = pickle.loads(typesbytes)
-                                mm_header[0][1] = len(typesbytes)
-                                dtypelen = len(typesbytes)
-                                mm = np.memmap(filename, dtype=np.byte, mode='r+', shape=(len(typesbytes),), offset=8)
-                                for ind,v in enumerate(typesbytes):
-                                    mm[ind]= v
-
-                            mm = np.memmap(filename, dtype=item.total_dtypes, mode='r+', shape=(1,), offset=8+dtypelen+curpos*item.total_dtypes.itemsize)
-                            mm[0] = item.total_array_data[0]
-                            # mm.flush()
-
-                            mm_header[0][0] = curpos + 1
+                            append_item(filename,item)
                             # logger.debug("fp pos:%s  %s",curpos + 1,filename)
 
                         if item.type_id == 4:  # HMDTickType_SHStepTrade 4 上海逐笔成交数据
                             v = item.total_list_value
                             symbol = v[0]
                             filename = os.path.join(curdate, symbol + "_SHStepTrade.data")
-
-                            mm_header = np.memmap(filename, dtype=np.uint32, mode='r+', shape=(1, 2), offset=0)
-                            curpos, dtypelen = mm_header[0][0], mm_header[0][1]
-
-                            if 0 == curpos:
-                                typesbytes = pickle.dumps(item.total_dtypes.descr)
-                                # p = pickle.loads(typesbytes)
-                                mm_header[0][1] = len(typesbytes)
-                                dtypelen = len(typesbytes)
-                                mm = np.memmap(filename, dtype=np.byte, mode='r+', shape=(len(typesbytes),), offset=8)
-                                for ind, v in enumerate(typesbytes):
-                                    mm[ind] = v
-
-                            mm = np.memmap(filename, dtype=item.total_dtypes, mode='r+', shape=(1,),
-                                           offset=8 +dtypelen + curpos * item.total_dtypes.itemsize)
-                            mm[0] = item.total_array_data[0]
-                            # mm.flush()
-
-                            mm_header[0][0] = curpos + 1
+                            append_item(filename, item)
 
                         if item.type_id == 5:  # HMDTickType_SZStepTrade 5 深圳逐笔成交数据
                             v = item.total_list_value
                             symbol = v[0]
                             filename = os.path.join(curdate, symbol + "_SZStepTrade.data")
-
-                            mm_header = np.memmap(filename, dtype=np.uint32, mode='r+', shape=(1, 2), offset=0)
-                            curpos, dtypelen = mm_header[0][0], mm_header[0][1]
-
-                            if 0 == curpos:
-                                typesbytes = pickle.dumps(item.total_dtypes.descr)
-                                # p = pickle.loads(typesbytes)
-                                mm_header[0][1] = len(typesbytes)
-                                dtypelen = len(typesbytes)
-                                mm = np.memmap(filename, dtype=np.byte, mode='r+', shape=(len(typesbytes),), offset=8)
-                                for ind, v in enumerate(typesbytes):
-                                    mm[ind] = v
-
-                            mm = np.memmap(filename, dtype=item.total_dtypes, mode='r+', shape=(1,),
-                                           offset=8 +dtypelen + curpos * item.total_dtypes.itemsize)
-                            mm[0] = item.total_array_data[0]
-                            # mm.flush()
-
-                            mm_header[0][0] = curpos + 1
+                            append_item(filename,item)
 
                 except Exception as e:
                     logger.exception("In While Exception:")
@@ -524,55 +563,6 @@ def refreshUIData(**kargs):
 
     return []
 
-# pdData = None
-def refreshUIData_shareFile(**kargs):
-    logger.debug("page1 call refreshUIData_shareFile .. ")
-    # global pdData
-    data = kargs['lis']
-    pdData = data[0]
-    try:
-        #读取文件
-        curdate = time.strftime("%Y%m%d")
-        global g_config_path
-        initmap = config_ini_key_value(keys=[],config_file=g_config_path)
-        symbols = initmap['symbols'].split(',')
-
-        symboll = []
-        if pdData is not None and len(pdData) > 0:
-            symboll = [str(v[:9], encoding="utf8") for v in pdData["symbol"].values]
-
-        for symbol in symbols:
-            filename = os.path.join(curdate, symbol + "_SecurityTick.data")
-            if not os.path.exists(filename):
-                continue
-
-            mm = np.memmap(filename, dtype=np.uint32, mode='r', shape=(1, 2), offset=0)
-            curpos, dtypelen = mm[0][0], mm[0][1]
-            curpos -= 1
-            if curpos>0:
-                mm = np.memmap(filename, dtype=np.byte, mode='r', shape=(dtypelen,), offset=8)
-                itemdtypes_descr = pickle.loads(mm)
-                itemdtypes = np.dtype(itemdtypes_descr)
-                mm = np.memmap(filename, dtype=itemdtypes, mode='r', shape=(1,1),
-                               offset=8 + dtypelen + curpos * itemdtypes.itemsize)
-                # while 0 == mm[0][0][0][0]:  #wait memdata write to file
-                #     time.sleep(0.01)
-                #     continue
-                itemdf = pd.DataFrame([pd.Series(list(mm[0][0]), index=itemdtypes.names)], index=[symbol])
-
-                # if pdData is None:
-                #     pdData = pd.DataFrame(columns=itemdtypes.names)
-                if symbol not in symboll:
-                    pdData = pdData.append(itemdf)
-                else:
-                    pdData.update(itemdf)
-    except Exception as e:
-        logger.exception("refreshUIData Exception:")
-        logger.exception(e)
-
-    data[0] = pdData
-    return []
-    # return [pdData]
 
 def refresh_line_bar_shareFile(symbol, **kargs):
     curdate = time.strftime("%Y%m%d")

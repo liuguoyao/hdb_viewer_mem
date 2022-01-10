@@ -21,13 +21,14 @@ class SnapshotTableModel(QAbstractTableModel):
         self._data = pd.DataFrame()
 
         manager = Manager()
-        self.manager_dic_SecurityTick = manager.dict() #内存快照信息
-        self.manager_dic_SHSetpTrade = manager.dict() #
-        self.manager_dic_SZSetpTrade = manager.dict() #
-        self.manager_list = manager.list() #tableview显示的快照信息
-        self.manager_list.append(pd.DataFrame())
+        # self.manager_dic_SecurityTick = manager.dict() #内存快照信息
+        # self.manager_dic_SHSetpTrade = manager.dict() #
+        # self.manager_dic_SZSetpTrade = manager.dict() #
+        # self.manager_list = manager.list() #tableview显示的快照信息
+        # self.manager_list.append(pd.DataFrame())
 
         self._background_color = []
+        self._data_bak = pd.DataFrame()
 
         self.fetchData = None
         self.reading = False
@@ -126,15 +127,43 @@ class SnapshotTableModel(QAbstractTableModel):
 
     def refreshUIData(self):
         logger.debug("snap shot refreshUIData ...")
-
-        # self.refreshUI = FetchData_Background_decorator(refreshUIData, dic_security=self.manager_dic_SecurityTick, lis=self.manager_list)
-        # self.refreshUI.sigDataReturn.connect(self.refreshUI_slot)
         try:
-            self.refreshUI = FetchData_Background_decorator(refreshUIData_shareFile, lis=self.manager_list)
-            self.refreshUI.sigDataReturn.connect(self.refreshUI_slot_shareFile)
+            # 读取文件
+            curdate = time.strftime("%Y%m%d")
+            global g_config_path
+            initmap = config_ini_key_value(keys=[], config_file=g_config_path)
+            symbols = initmap['symbols'].split(',')
+
+            symboll = []
+            if self._data_bak is not None and len(self._data_bak) > 0:
+                symboll = [str(v[:9], encoding="utf8") for v in self._data_bak.symbol.values]
+
+            for symbol in symbols:
+                filename = os.path.join(curdate, symbol + "_SecurityTick.data")
+                if not os.path.exists(filename):
+                    continue
+
+                itemdf = read_item_last(filename,index_symbol=symbol)
+
+                if symbol not in symboll:
+                    self._data_bak = self._data_bak.append(itemdf)
+                else:
+                    self._data_bak.update(itemdf)
+
+            self._data = self._data_bak[initmap["header_show"].split(',')]
+            self._background_color = []
+            self._foreground_color = []
+            rows, cls = self._data.shape[0], self._data.shape[1]
+            for rowidx in range(rows):
+                self._background_color.append([QBrush(QColor(255, 255, 255)) for i in range(cls)])
+                self._foreground_color.append([QBrush(QColor(0, 100, 200)) for i in range(cls)])
+
+            self.layoutChanged.emit()
+
         except Exception as e:
-            logger.debug(e)
-        pass
+            logger.exception("refreshUIData Exception:")
+            logger.exception(e)
+        return
 
     def refreshUI_slot(self, result_list):
         ml = self.manager_list[0]
@@ -154,25 +183,6 @@ class SnapshotTableModel(QAbstractTableModel):
         self.layoutChanged.emit()
         self.sigdatafresh.emit()
         pass
-
-    def refreshUI_slot_shareFile(self, result_list):
-        ml = self.manager_list[0]
-        # ml = result_list[0]
-        if ml is None or len(ml)==0:
-            return
-        # filter clumns
-        initmap = config_ini_key_value(keys=[], config_file=r"./config/system_config.ini")
-        self._data = ml[initmap["header_show"].split(',')]
-
-        self._background_color = []
-        self._foreground_color = []
-        rows, cls = self._data.shape[0],self._data.shape[1]
-        for rowidx in range(rows):
-            self._background_color.append([QBrush(QColor(255, 255, 255)) for i in range(cls)])
-            self._foreground_color.append([QBrush(QColor(0, 100, 200)) for i in range(cls)])
-
-        self.layoutChanged.emit()
-        # self.sigdatafresh.emit()
 
     def __del__(self):
         logger.debug("snapshot tablemode del")
