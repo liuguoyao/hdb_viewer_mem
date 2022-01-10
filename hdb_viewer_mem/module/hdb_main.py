@@ -131,54 +131,6 @@ class hdb_main_win(QMainWindow, Ui_HdbMainWin):
         self.slot_actionmulwins()
         pass
 
-    def refresh_askbid_order_table(self,symbol,ind=0):
-        intrplot: IntraDayPlotWidget = self.gridLayout_2.itemAtPosition(*self.widgetpos[ind]).widget()
-        # symbol = intrplot.rightwin.symbol_label.text()
-        #
-        if symbol not in self.snapshotTableModel.manager_dic_SecurityTick.keys():
-            return
-
-        # 获取快照数据
-        data: pd.DataFrame = self.snapshotTableModel.manager_dic_SecurityTick[symbol]
-        # data = data[data['time']>=93000000]  #开盘前数据去掉
-        if len(data) < 1:
-            return
-        # data = data.reset_index(drop=True)
-        pre_close = data['pre_close'][0]/10000
-        intrplot.set_time_labels((data['time'].apply(lambda x:int(x/1000))).tolist())
-
-        x = list(range(data.shape[0]))
-        y_volume = data['volume'] - data['volume'].shift(axis=0, fill_value=0)
-        y_price = (data['match'] / 10000).tolist()
-        intrplot.set_ReturnAxis_benchmark_prcie(pre_close)
-        intrplot.price_line.setData(x=x, y=y_price)
-        intrplot.plotbar(x=x, height=y_volume.tolist(), color=QColor(0, 204, 0, 128))
-
-        # 获取askbid快照数据
-        ask_price = (data["ask_price"].values[-1]/10000).tolist()
-        ask_vol = data["ask_vol"].values[-1].tolist()
-        bid_price = (data["bid_price"].values[-1]/10000).tolist()
-        bid_vol = data["bid_vol"].values[-1].tolist()
-        intrplot.set_askbid_data(ask_price,ask_vol,bid_price,bid_vol)
-
-        # 获取 trade快照数据
-        if symbol[:2] == 'SH':
-            data_order: pd.DataFrame = self.snapshotTableModel.manager_dic_SHSetpTrade[symbol]
-            data_order = data_order[['trade_time', 'trade_price', 'trade_qty', 'bs_flag']]
-            # data_order = data_order[
-            #     (data_order['trade_time'] >= 93000000) & (data_order['trade_time'] <= data['time'].values[-1])]
-            data_order.loc[:, 'trade_price'] = data_order['trade_price'].apply(lambda x: x / 10000)
-            data_order.loc[:, 'trade_time'] = data_order['trade_time'].apply(lambda x: int(x / 1000))
-            data_order.loc[:, 'bs_flag'] = data_order['bs_flag'].map({66: 'B', 83: 'S'})
-            # data_order = data_order.reset_index(drop=True)
-        elif symbol[:2] == 'SZ':
-            data_order: pd.DataFrame = self.snapshotTableModel.manager_dic_SZSetpTrade[symbol]
-            data_order = data_order[['transact_time', 'last_px', 'last_qty', 'exec_type']]
-        else:
-            return
-
-        intrplot.set_order_data(data_order)
-        pass
 
     def refresh_askbid_order_table_shareFile(self,symbol,ind=0):
         intrplot: IntraDayPlotWidget = self.gridLayout_2.itemAtPosition(*self.widgetpos[ind]).widget()
@@ -239,42 +191,6 @@ class hdb_main_win(QMainWindow, Ui_HdbMainWin):
         else:
             return
 
-
-    def refresh_line_bar(self,ind,symbol,resetxrange=False):
-        if symbol not in self.snapshotTableModel.manager_dic_SecurityTick.keys():
-            return
-        data: pd.DataFrame = self.snapshotTableModel.manager_dic_SecurityTick[symbol]
-        # data = data[data['time'] >= 93000000]  # 开盘前数据去掉
-        if len(data) < 1:
-            return
-        # data = data.reset_index(drop=True)
-        pre_close = data['pre_close'][0] / 10000
-        intrplot:IntraDayPlotWidget = self.gridLayout_2.itemAtPosition(*self.widgetpos[ind]).widget()
-        intrplot.rightwin.symbol_label.setText(symbol)
-        timelables = (data['time'].apply(lambda x: int(x / 1000))).tolist()
-        intrplot.set_time_labels(timelables)
-
-        x = list(range(data.shape[0]))
-        y_volume = data['volume'] - data['volume'].shift(axis=0, fill_value=0)
-        y_price = (data['match'] / 10000).tolist()
-        intrplot.set_ReturnAxis_benchmark_prcie(pre_close)
-        intrplot.price_line.setData(x=x, y=y_price)
-        intrplot.plotbar(x=x, height=y_volume.tolist(), color=QColor(0, 204, 0, 128))
-
-        #设置plot的x活动范围限制
-        today = time.strftime("%Y%m%d")
-        startstramp = time.mktime(time.strptime(today+" 093000","%Y%m%d %H%M%S"))
-        currenttime = " {:0>6d}".format(timelables[-1])
-        endstramp = time.mktime(time.strptime(today+currenttime,"%Y%m%d %H%M%S"))
-
-        timeinterval = endstramp - startstramp
-        timeinterval = timeinterval if timeinterval<=2*60*60 else timeinterval-1.5*60*60 #去除中午休市
-        xMax = int(4*60*60/timeinterval*len(timelables))
-        intrplot.setLimits(0,xMax)
-
-        if resetxrange:
-            intrplot.setXRange(0,xMax)
-
     def refresh_line_bar_shareFile(self,ind,symbol,resetxrange=False):
         self.fetchData_refresh_line_bar = FetchData_Background_decorator(refresh_line_bar_shareFile,symbol)
         self.fetchData_refresh_line_bar.sigDataReturn.connect(lambda r:self.refresh_line_bar_shareFile_slot(ind,symbol,r,resetxrange))
@@ -300,44 +216,6 @@ class hdb_main_win(QMainWindow, Ui_HdbMainWin):
         except Exception as e:
             logger.debug("refresh_line_bar_shareFile_slot")
             logger.debug(e)
-
-    # def mousemove_refresh_askbid_order_table_slot(self,intradayplot:IntraDayPlotWidget,ind):
-    def mousemove_refresh_askbid_order_table_slot(self,*args):
-        intradayplot, ind = args[0][0]
-        if self.mutiwidgets:
-            return
-        symbol = intradayplot.rightwin.symbol_label.text()
-        if symbol not in self.snapshotTableModel.manager_dic_SecurityTick.keys():
-            return
-        #获取 askbid快照数据
-        data: pd.DataFrame = self.snapshotTableModel.manager_dic_SecurityTick[symbol]
-        # data = data[data['time'] >= 93000000]  # 开盘前数据去掉
-        if len(data) < 1 or ind>(len(data)-1) or ind<0:
-            return
-        # data = data.reset_index(drop=True)
-
-        ask_price = (data["ask_price"][ind]/10000).tolist()
-        ask_vol = data["ask_vol"][ind].tolist()
-        bid_price = (data["bid_price"][ind]/10000).tolist()
-        bid_vol = data["bid_vol"][ind].tolist()
-        intradayplot.set_askbid_data(ask_price,ask_vol,bid_price,bid_vol)
-
-        #获取 trade快照数据
-        if symbol[:2] == 'SH':
-            data_order: pd.DataFrame = self.snapshotTableModel.manager_dic_SHSetpTrade[symbol]
-            data_order = data_order[['trade_time', 'trade_price', 'trade_qty', 'bs_flag']]
-            # data_order = data_order[(data_order['trade_time']>=93000000) & (data_order['trade_time']<=data['time'][ind])]
-            # data_order.loc[:, 'trade_price'] = data_order['trade_price'].apply(lambda x:x/10000)
-            # data_order.loc[:, 'trade_time'] = data_order['trade_time'].apply(lambda x: int(x / 1000))
-            # data_order.loc[:, 'bs_flag'] = data_order['bs_flag'].map({66: 'B', 83: 'S'})
-            # data_order = data_order.reset_index(drop=True)
-        elif symbol[:2] == 'SZ':
-            data_order: pd.DataFrame = self.snapshotTableModel.manager_dic_SZSetpTrade[symbol]
-            data_order = data_order[['transact_time', 'last_px', 'last_qty', 'exec_type']]
-        else:
-            return
-
-        intradayplot.set_order_data(data_order)
 
     def mousemove_refresh_askbid_order_table_shareFile_slot(self,*args):
         intradayplot, ind = args[0][0]

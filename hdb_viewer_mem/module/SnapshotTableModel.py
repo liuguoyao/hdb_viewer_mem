@@ -20,13 +20,6 @@ class SnapshotTableModel(QAbstractTableModel):
         super(SnapshotTableModel, self).__init__()
         self._data = pd.DataFrame()
 
-        manager = Manager()
-        # self.manager_dic_SecurityTick = manager.dict() #内存快照信息
-        # self.manager_dic_SHSetpTrade = manager.dict() #
-        # self.manager_dic_SZSetpTrade = manager.dict() #
-        # self.manager_list = manager.list() #tableview显示的快照信息
-        # self.manager_list.append(pd.DataFrame())
-
         self._background_color = []
         self._data_bak = pd.DataFrame()
 
@@ -110,16 +103,7 @@ class SnapshotTableModel(QAbstractTableModel):
         if self.fetchData is None or not self.reading:
             self.reading = True
             logger.debug("fetchData is None or not reading")
-            # self.fetchData = FetchData_Background_decorator(snapCachRefresh,
-            #                                                 dic_security=self.manager_dic_SecurityTick,
-            #                                                 dic_SHSetpTrade = self.manager_dic_SHSetpTrade,
-            #                                                 dic_SZSetpTrade = self.manager_dic_SZSetpTrade)
-
             self.fetchData = FetchData_Background_decorator(snapCachRefresh_shareFile)
-
-
-            # self.fetchData.sigProgressRate.connect(lambda v: print('PprogressRate emit rev:', v))
-            # self.fetchData.sigProgressRate.connect(lambda v: print('sigProgressRate emit rev:', v))
         else:
             logger.debug("is reading ...")
 
@@ -164,25 +148,6 @@ class SnapshotTableModel(QAbstractTableModel):
             logger.exception("refreshUIData Exception:")
             logger.exception(e)
         return
-
-    def refreshUI_slot(self, result_list):
-        ml = self.manager_list[0]
-        if len(ml)==0:
-            return
-        # filter clumns
-        initmap = config_ini_key_value(keys=[], config_file=r"./config/system_config.ini")
-        self._data = ml[initmap["header_show"].split(',')]
-
-        self._background_color = []
-        self._foreground_color = []
-        rows, cls = self._data.shape[0],self._data.shape[1]
-        for rowidx in range(rows):
-            self._background_color.append([QBrush(QColor(255, 255, 255)) for i in range(cls)])
-            self._foreground_color.append([QBrush(QColor(0, 100, 200)) for i in range(cls)])
-
-        self.layoutChanged.emit()
-        self.sigdatafresh.emit()
-        pass
 
     def __del__(self):
         logger.debug("snapshot tablemode del")
