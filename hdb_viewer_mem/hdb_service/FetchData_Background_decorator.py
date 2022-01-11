@@ -237,7 +237,7 @@ def snapCachRefresh_shareFile( **kargs):
             for symbol in symbols:
                 filename = os.path.join(curdate, symbol + "_SecurityTick.data")
                 if os.path.exists(filename) and os.path.getsize(filename) > 0:
-                    itemdf = read_item_last(filename,symbol)
+                    itemdf = read_item_last(filename)
                     time_point_seq_no, itemtime = itemdf.time_point_seq_no.values[0], itemdf.time.values[0]
                     symbols_curpos[filename] = [symbol, "SecurityTick", itemtime, time_point_seq_no]
                     logger.debug("%s %s %s :", filename, time_point_seq_no, itemtime)  #
@@ -254,7 +254,7 @@ def snapCachRefresh_shareFile( **kargs):
                 if 'SZ' == symbol[:2]:
                     filename = os.path.join(curdate, symbol + "_SZStepTrade.data")
                 if os.path.exists(filename) and os.path.getsize(filename) > 0:
-                    itemdf = read_item_last(filename, symbol)
+                    itemdf = read_item_last(filename)
                     if 'SH' == symbol[:2]:
                         time_point_seq_no, itemtime = itemdf.time_point_seq_no.values[0], itemdf.trade_time.values[0]
                         symbols_curpos[filename] = [symbol, "SHStepTrade", itemtime, time_point_seq_no]

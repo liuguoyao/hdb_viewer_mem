@@ -122,6 +122,7 @@ class hdb_main_win(QMainWindow, Ui_HdbMainWin):
             return
         self.symbollist_showind -= 4
         self.slot_actionmulwins()
+        self.cur_refresh_pos = 0
         pass
 
     def slot_action_down(self):
@@ -129,6 +130,7 @@ class hdb_main_win(QMainWindow, Ui_HdbMainWin):
             return
         self.symbollist_showind += 4
         self.slot_actionmulwins()
+        self.cur_refresh_pos = 0
         pass
 
 
@@ -137,16 +139,7 @@ class hdb_main_win(QMainWindow, Ui_HdbMainWin):
 
         curdate = time.strftime("%Y%m%d")
         filename = os.path.join(curdate, symbol + "_SecurityTick.data")
-        mm_header = np.memmap(filename, dtype=np.uint32, mode='r', shape=(1, 2), offset=0)
-        curpos, dtypelen = mm_header[0][0], mm_header[0][1]
-        if curpos<1:
-            return
-        mm_dtype = np.memmap(filename, dtype=np.byte, mode='r', shape=(dtypelen,), offset=8)
-        itemdtypes_descr = pickle.loads(mm_dtype)
-        itemdtypes = np.dtype(itemdtypes_descr)
-        mm_items = np.memmap(filename, dtype=itemdtypes, mode='r', shape=(1,),
-                             offset=8 + dtypelen + (curpos-1) * itemdtypes.itemsize)
-        securityTickData = pd.DataFrame([list(v) for v in mm_items], columns=itemdtypes.names)
+        securityTickData = read_item_last(filename)
 
         # 获取askbid快照数据
         ask_price = (securityTickData["ask_price"].values[-1]/10000).tolist()
@@ -158,16 +151,7 @@ class hdb_main_win(QMainWindow, Ui_HdbMainWin):
         # 获取 trade快照数据
         if symbol[:2] == 'SH':
             filename = os.path.join(curdate, symbol + "_SHStepTrade.data")
-            mm_header = np.memmap(filename, dtype=np.uint32, mode='r', shape=(1, 2), offset=0)
-            curpos, dtypelen = mm_header[0][0], mm_header[0][1]
-            if curpos < 1:
-                return
-            mm_dtype = np.memmap(filename, dtype=np.byte, mode='r', shape=(dtypelen,), offset=8)
-            itemdtypes_descr = pickle.loads(mm_dtype)
-            itemdtypes = np.dtype(itemdtypes_descr)
-            mm_items = np.memmap(filename, dtype=itemdtypes, mode='r', shape=(curpos,),
-                                 offset=8 + dtypelen)
-            SHStepData = pd.DataFrame([list(v) for v in mm_items], columns=itemdtypes.names)
+            SHStepData = read_items(filename)
 
             SHStepData = SHStepData[['trade_time', 'trade_price', 'trade_qty', 'bs_flag']]
             SHStepData.loc[:, 'trade_price'] = SHStepData['trade_price'].apply(lambda x: x / 10000)
@@ -176,16 +160,7 @@ class hdb_main_win(QMainWindow, Ui_HdbMainWin):
             intrplot.set_order_data(SHStepData)
         elif symbol[:2] == 'SZ':
             filename = os.path.join(curdate, symbol + "_SZStepTrade.data")
-            mm_header = np.memmap(filename, dtype=np.uint32, mode='r', shape=(1, 2), offset=0)
-            curpos, dtypelen = mm_header[0][0], mm_header[0][1]
-            if curpos < 1:
-                return
-            mm_dtype = np.memmap(filename, dtype=np.byte, mode='r', shape=(dtypelen,), offset=8)
-            itemdtypes_descr = pickle.loads(mm_dtype)
-            itemdtypes = np.dtype(itemdtypes_descr)
-            mm_items = np.memmap(filename, dtype=itemdtypes, mode='r', shape=(curpos,),
-                                 offset=8 + dtypelen)
-            SZStepData = pd.DataFrame([list(v) for v in mm_items], columns=itemdtypes.names)
+            SZStepData = read_items(filename)
             SZStepData = SZStepData[['transact_time', 'last_px', 'last_qty', 'exec_type']]
             intrplot.set_order_data(SZStepData)
         else:
@@ -205,7 +180,8 @@ class hdb_main_win(QMainWindow, Ui_HdbMainWin):
 
             intrplot.set_ReturnAxis_benchmark_prcie(pre_close)
             intrplot.price_line.setData(x=x, y=y_price)
-            intrplot.plotbar(x=x, height=y_volume.tolist(), color=QColor(0, 204, 0, 128))
+            # intrplot.plotbar(x=x, height=y_volume.tolist(), color=QColor(0, 204, 0, 128))
+            intrplot.plotbar(x=x, height=y_volume.tolist())
 
             #设置plot的x活动范围限制
             intrplot.setLimits(0,xMax)
@@ -330,10 +306,11 @@ class hdb_main_win(QMainWindow, Ui_HdbMainWin):
             self.refresh_askbid_order_table_shareFile(symbol)
         else:
             ind = self.cur_refresh_pos
-            symbol = self.symbollist[self.symbollist_showind+ind]
-            self.refresh_line_bar_shareFile(ind, symbol, resetxrange=resetxrange)
-            intrplot: IntraDayPlotWidget = self.gridLayout_2.itemAtPosition(*self.widgetpos[ind]).widget()
-            intrplot.set_symbolname(symbol)
+            if self.symbollist_showind+ind < len(self.symbollist):
+                symbol = self.symbollist[self.symbollist_showind+ind]
+                self.refresh_line_bar_shareFile(ind, symbol, resetxrange=resetxrange)
+                intrplot: IntraDayPlotWidget = self.gridLayout_2.itemAtPosition(*self.widgetpos[ind]).widget()
+                intrplot.set_symbolname(symbol)
             self.cur_refresh_pos +=1
             self.cur_refresh_pos = self.cur_refresh_pos%4
 

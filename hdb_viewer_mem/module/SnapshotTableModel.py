@@ -127,7 +127,7 @@ class SnapshotTableModel(QAbstractTableModel):
                 if not os.path.exists(filename):
                     continue
 
-                itemdf = read_item_last(filename,index_symbol=symbol)
+                itemdf = read_item_last(filename)
 
                 if symbol not in symboll:
                     self._data_bak = self._data_bak.append(itemdf)
