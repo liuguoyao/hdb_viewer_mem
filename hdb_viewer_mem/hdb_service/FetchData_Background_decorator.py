@@ -217,16 +217,6 @@ def snapCachRefresh_shareFile( **kargs):
         # create sharefile if not exist:
         if not os.path.exists(curdate):
             os.mkdir(curdate)
-        for symbol in symbols:
-            curpath = os.path.join(curdate, symbol + "_SecurityTick.data")
-            if not os.path.exists(curpath):
-                open(curpath, mode='w+').close()
-            curpath = os.path.join(curdate, symbol + "_SZStepTrade.data")
-            if symbol[:2] == "SZ" and not os.path.exists(curpath):
-                open(curpath, mode='w+').close()
-            curpath = os.path.join(curdate, symbol + "_SHStepTrade.data")
-            if symbol[:2] == "SH" and not os.path.exists(curpath):
-                open(curpath, mode='w+').close()
 
         #再从服务器 读取剩余部分
         curtime_4w = time.time()
