@@ -106,7 +106,7 @@ class hdb_main_win(QMainWindow, Ui_HdbMainWin):
         # symbollist = symbollist['symbol'].tolist()
         for ind in range(4):
             intrplot: IntraDayPlotWidget = self.gridLayout_2.itemAtPosition(*self.widgetpos[ind]).widget()
-            intrplot.leftwin.symbol_label.setText("")
+            intrplot.set_symbolname("")
             intrplot.plotbar(x=[], height=[])
             intrplot.price_line.setData(x=[], y=[])
         for ind, symbol in enumerate(self.symbollist[self.symbollist_showind:self.symbollist_showind+4]):
@@ -115,7 +115,7 @@ class hdb_main_win(QMainWindow, Ui_HdbMainWin):
             # self.refresh_line_bar(ind,symbol,resetxrange=True)
             # self.refresh_line_bar_shareFile(ind,symbol,resetxrange=True)
             intrplot: IntraDayPlotWidget = self.gridLayout_2.itemAtPosition(*self.widgetpos[ind]).widget()
-            intrplot.leftwin.symbol_label.setText(symbol)
+            intrplot.set_symbolname(symbol)
 
     def slot_action_up(self):
         if 0 == self.symbollist_showind:
@@ -200,7 +200,7 @@ class hdb_main_win(QMainWindow, Ui_HdbMainWin):
             pre_close, timelables, x, y_volume, y_price, xMax = r[0]
 
             intrplot:IntraDayPlotWidget = self.gridLayout_2.itemAtPosition(*self.widgetpos[ind]).widget()
-            intrplot.rightwin.symbol_label.setText(symbol)
+            # intrplot.rightwin.symbol_label.setText(symbol)
             intrplot.set_time_labels(timelables)
 
             intrplot.set_ReturnAxis_benchmark_prcie(pre_close)
@@ -316,23 +316,26 @@ class hdb_main_win(QMainWindow, Ui_HdbMainWin):
         intrplot:IntraDayPlotWidget = self.gridLayout_2.itemAtPosition(0, 0).widget()
         intrplot.set_symbolname(symbol)
 
-        # self.page2_UIdata_refresh(resetxrange=True)
+        self.page2_UIdata_refresh(resetxrange=True)
         pass
 
     def page2_UIdata_refresh(self,resetxrange=False):
         logger.debug("page2_UIdata_refresh ...")
         if self.stackedWidget.currentIndex() != 1:
             return
-        ind = self.cur_refresh_pos
-        symbol = self.symbollist[self.symbollist_showind+ind]
-        self.refresh_line_bar_shareFile(ind, symbol, resetxrange=resetxrange)
-        if 0 == ind and not self.mutiwidgets:
+        if not self.mutiwidgets: #单窗口下
+            intrplot: IntraDayPlotWidget = self.gridLayout_2.itemAtPosition(0, 0).widget()
+            symbol = intrplot.rightwin.symbol_label.text()
+            self.refresh_line_bar_shareFile(0, symbol, resetxrange=resetxrange)
             self.refresh_askbid_order_table_shareFile(symbol)
-        intrplot: IntraDayPlotWidget = self.gridLayout_2.itemAtPosition(*self.widgetpos[ind]).widget()
-        intrplot.leftwin.symbol_label.setText(symbol)
-        intrplot.rightwin.symbol_label.setText(symbol)
-        self.cur_refresh_pos +=1
-        self.cur_refresh_pos = self.cur_refresh_pos%4
+        else:
+            ind = self.cur_refresh_pos
+            symbol = self.symbollist[self.symbollist_showind+ind]
+            self.refresh_line_bar_shareFile(ind, symbol, resetxrange=resetxrange)
+            intrplot: IntraDayPlotWidget = self.gridLayout_2.itemAtPosition(*self.widgetpos[ind]).widget()
+            intrplot.set_symbolname(symbol)
+            self.cur_refresh_pos +=1
+            self.cur_refresh_pos = self.cur_refresh_pos%4
 
     def back(self):
         totalpages = self.stackedWidget.count()

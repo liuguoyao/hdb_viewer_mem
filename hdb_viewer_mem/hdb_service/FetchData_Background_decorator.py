@@ -203,13 +203,14 @@ def snapCachRefresh_shareFile( **kargs):
         # config_path = r"./config/system_config.ini"
         initmap = config_ini_key_value(keys=[],config_file=g_config_path)
         curdate = time.strftime("%Y%m%d")
+        today = int(curdate)
         curtime = 93000000
-        tickname = "tick_" + time.strftime("%Y%m%d")
+        tickname = "tick_" + curdate
         file_path = "memory/marketdata/" + tickname
 
-        today = 20200113  # test
-        tickname = "tick_20230807"  # test
-        file_path = "memory/marketdata/tick_20230807"  #test
+        # today = 20200113  # test
+        # tickname = "tick_20230807"  # test
+        # file_path = "memory/marketdata/tick_20230807"  #test
 
         symbols = initmap['symbols'].split(',')
 

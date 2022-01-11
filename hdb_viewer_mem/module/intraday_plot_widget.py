@@ -602,13 +602,25 @@ class PandasModelBS(QAbstractTableModel):
         self._data = np.array(data.values)
         self._cols = data.columns
         self.r, self.c = np.shape(self._data)
+        self.pre_close = 0
+        self.Foregroundlist = []
 
-    def load(self, data):
+    def load(self, data, pre_close):
+        self.pre_close = pre_close
         self.beginResetModel()
         self._data = np.array(data.values)
         self._cols = data.columns
         self.r, self.c = np.shape(self._data)
         self.endResetModel()
+
+        self.Foregroundlist = []
+        for v in pd.DataFrame(self._data).iloc[:,2]:
+            if v > self.pre_close:
+                self.Foregroundlist.append(QColor(QtCore.Qt.red))
+            elif v < self.pre_close:
+                self.Foregroundlist.append(QColor(QtCore.Qt.green))
+            else:
+                self.Foregroundlist.append(QColor(QtCore.Qt.black))
         # self.layoutChanged.emit()
 
     def rowCount(self, parent=None):
@@ -630,12 +642,9 @@ class PandasModelBS(QAbstractTableModel):
                     br = QBrush(QColor(0xFF, 0xFF, 0xFF))
                 return br
             if role == QtCore.Qt.ForegroundRole:
-                color = QColor(QtCore.Qt.black)
-                if index.row() < 10 and index.column()>0:  # and index.column() == 0:
-                    color = QColor(QtCore.Qt.green)
-                elif index.column() > 0:
-                    color = QColor(QtCore.Qt.red)
-                return color
+                if index.row()>len(self.Foregroundlist):
+                    return QColor(QtCore.Qt.black)
+                return self.Foregroundlist[index.row()]
         return None
 
     def headerData(self, p_int, orientation, role):
@@ -729,7 +738,7 @@ class TableBS(QWidget):
         self.setLayout(layout)
 
 
-    def refreshData(self, askprice, askvol, bidprice, bidvol):
+    def refreshData(self, askprice, askvol, bidprice, bidvol,pre_close):
         if len(askprice) < 10 or len(bidprice) < 10:
             return
         reversaskprice = askprice.copy()
@@ -743,7 +752,7 @@ class TableBS(QWidget):
             else:
                 self.df2.iat[index, 2] = bidprice[index - 10]
                 self.df2.iat[index, 3] = bidvol[index - 10]
-        self.model.load(self.df2)
+        self.model.load(self.df2,pre_close)
 
 
 class TableOrder(QWidget):
@@ -850,7 +859,7 @@ class IntraDayPlotWidget(QWidget):
 
     def set_askbid_data(self,askprice, askvol, bidprice, bidvol):
         # refreshData
-        self.rightwin.askbidtable.refreshData(askprice, askvol, bidprice, bidvol)
+        self.rightwin.askbidtable.refreshData(askprice, askvol, bidprice, bidvol,self.leftwin.returnAxis.pre_close)
 
     def set_order_data(self,data):
         self.rightwin.ordertable.refreshData(data)

@@ -134,13 +134,25 @@ class SnapshotTableModel(QAbstractTableModel):
                 else:
                     self._data_bak.update(itemdf)
 
+            if len(self._data_bak) == 0:
+                return
+
             self._data = self._data_bak[initmap["header_show"].split(',')]
+            symbol_Ser = self._data['symbol'].apply(lambda x : str(x[:9],encoding="utf-8"))
+            self._data.loc[:,'symbol'] = symbol_Ser
             self._background_color = []
             self._foreground_color = []
             rows, cls = self._data.shape[0], self._data.shape[1]
             for rowidx in range(rows):
+                pre_close = self._data_bak.iloc[rowidx]['pre_close']
+                match = self._data_bak.iloc[rowidx]['match']
                 self._background_color.append([QBrush(QColor(255, 255, 255)) for i in range(cls)])
-                self._foreground_color.append([QBrush(QColor(0, 100, 200)) for i in range(cls)])
+                if pre_close<match:
+                    self._foreground_color.append([QBrush(QColor(200, 10, 10)) for i in range(cls)])
+                elif pre_close==match:
+                    self._foreground_color.append([QBrush(QColor(10, 10, 10)) for i in range(cls)])
+                else:
+                    self._foreground_color.append([QBrush(QColor(10, 200, 10)) for i in range(cls)])
 
             self.layoutChanged.emit()
 
