@@ -642,6 +642,8 @@ class PandasModelBS(QAbstractTableModel):
                     br = QBrush(QColor(0xFF, 0xFF, 0xFF))
                 return br
             if role == QtCore.Qt.ForegroundRole:
+                if index.column() == 0:
+                    return QColor(QtCore.Qt.black)
                 if index.row()>len(self.Foregroundlist):
                     return QColor(QtCore.Qt.black)
                 return self.Foregroundlist[index.row()]

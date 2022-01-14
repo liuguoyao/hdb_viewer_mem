@@ -208,18 +208,12 @@ def snapCachRefresh_shareFile( **kargs):
         tickname = "tick_" + curdate
         file_path = "memory/marketdata/" + tickname
 
-        # today = 20200113  # test
-        # tickname = "tick_20230807"  # test
-        # file_path = "memory/marketdata/tick_20230807"  #test
-
         symbols = initmap['symbols'].split(',')
 
         # create sharefile if not exist:
         if not os.path.exists(curdate):
             os.mkdir(curdate)
 
-        #再从服务器 读取剩余部分
-        curtime_4w = time.time()
         while True:
             # 先读取本地数据 更新curtime offset
             maxpos = [93000000, 0]
@@ -303,25 +297,25 @@ def snapCachRefresh_shareFile( **kargs):
                                 df = pd.DataFrame([item.total_list_value],columns=list(item.total_list_value_names))
                                 dftime,df_sq = df.time[0],df.time_point_seq_no[0]
                                 if (itemtime==dftime and time_point_seq_no<df_sq) or (itemtime < dftime):
-                                    print("Write",filename,dftime,df_sq)
+                                    # print("Write",filename,dftime,df_sq)
                                     append_item(filename, item)
-                                print(filename,dftime, df_sq)
+                                # print(filename,dftime, df_sq)
                             if item.type_id == 4:  # HMDTickType_SHStepTrade 4 上海逐笔成交数据
                                 filename = os.path.join(curdate, symbol + "_SHStepTrade.data")
                                 df = pd.DataFrame([item.total_list_value], columns=list(item.total_list_value_names))
                                 dftime, df_sq = df.trade_time[0],df.time_point_seq_no[0]
                                 if (itemtime==dftime and time_point_seq_no<df_sq) or (itemtime < dftime):
-                                    print("Write",filename,dftime,df_sq)
+                                    # print("Write",filename,dftime,df_sq)
                                     append_item(filename, item)
-                                print(filename,dftime, df_sq)
+                                # print(filename,dftime, df_sq)
                             if item.type_id == 5:  # HMDTickType_SZStepTrade 5 深圳逐笔成交数据
                                 filename = os.path.join(curdate, symbol + "_SZStepTrade.data")
                                 df = pd.DataFrame([item.total_list_value], columns=list(item.total_list_value_names))
                                 dftime, df_sq = df.transact_time[0],df.time_point_seq_no[0]
                                 if (itemtime==dftime and time_point_seq_no<df_sq) or (itemtime < dftime):
-                                    print("Write",filename,dftime,df_sq)
+                                    # print("Write",filename,dftime,df_sq)
                                     append_item(filename, item)
-                                print(filename,dftime, df_sq)
+                                # print(filename,dftime, df_sq)
                     g_remoteLink.close_read_task()
 
             #load all
@@ -374,13 +368,14 @@ def snapCachRefresh_shareFile( **kargs):
 def refresh_line_bar_shareFile(symbol, **kargs):
     curdate = time.strftime("%Y%m%d")
     filename = os.path.join(curdate, symbol + "_SecurityTick.data")
-    mm_header = np.memmap(filename, dtype=np.uint32, mode='r', shape=(1, 2), offset=0)
-    curpos, dtypelen = mm_header[0][0], mm_header[0][1]
-    mm_dtype = np.memmap(filename, dtype=np.byte, mode='r', shape=(dtypelen,), offset=8)
-    itemdtypes_descr = pickle.loads(mm_dtype)
-    itemdtypes = np.dtype(itemdtypes_descr)
-    mm_items = np.memmap(filename, dtype=itemdtypes, mode='r', shape=(curpos, ),offset=8 + dtypelen)
-    data = pd.DataFrame([list(v) for v in mm_items], columns=itemdtypes.names)
+    # mm_header = np.memmap(filename, dtype=np.uint32, mode='r', shape=(1, 2), offset=0)
+    # curpos, dtypelen = mm_header[0][0], mm_header[0][1]
+    # mm_dtype = np.memmap(filename, dtype=np.byte, mode='r', shape=(dtypelen,), offset=8)
+    # itemdtypes_descr = pickle.loads(mm_dtype)
+    # itemdtypes = np.dtype(itemdtypes_descr)
+    # mm_items = np.memmap(filename, dtype=itemdtypes, mode='r', shape=(curpos, ),offset=8 + dtypelen)
+    # data = pd.DataFrame([list(v) for v in mm_items], columns=itemdtypes.names)
+    data = read_items(filename)
 
     # data = data.reset_index(drop=True)
     pre_close = data['pre_close'][0] / 10000
